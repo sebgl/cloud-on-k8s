@@ -5,7 +5,6 @@
 package v1
 
 import (
-	"github.com/elastic/cloud-on-k8s/pkg/controller/common/hash"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -69,11 +68,6 @@ type RemoteCluster struct {
 	ElasticsearchRef commonv1.ObjectSelector `json:"elasticsearchRef,omitempty"`
 
 	// TODO: Allow the user to specify some options (transport.compress, transport.ping_schedule)
-
-}
-
-func (r RemoteCluster) ConfigHash() string {
-	return hash.HashObject(r)
 }
 
 // NodeCount returns the total number of nodes of the Elasticsearch cluster

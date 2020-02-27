@@ -9,6 +9,7 @@ import (
 
 	esv1 "github.com/elastic/cloud-on-k8s/pkg/apis/elasticsearch/v1"
 	"github.com/elastic/cloud-on-k8s/pkg/controller/common/events"
+	"github.com/elastic/cloud-on-k8s/pkg/controller/common/hash"
 	"github.com/elastic/cloud-on-k8s/pkg/controller/common/license"
 	"github.com/elastic/cloud-on-k8s/pkg/controller/common/tracing"
 	esclient "github.com/elastic/cloud-on-k8s/pkg/controller/elasticsearch/client"
@@ -23,6 +24,35 @@ import (
 var log = logf.Log.WithName("remotecluster")
 
 const enterpriseFeaturesDisabledMsg = "Remote cluster is an enterprise feature. Enterprise features are disabled"
+
+type RemoteClustersByName map[string]esclient.RemoteCluster
+
+func (r RemoteClustersByName) Hashes() RemoteClustersHashes {
+	hashes := make(RemoteClustersHashes, len(r))
+	for name, remote := range r {
+		hashes[name] = remoteClusterHash(remote)
+	}
+	return hashes
+}
+func remoteClusterHash(remote esclient.RemoteCluster) string {
+	return hash.HashObject(remote)
+}
+
+func ParseRemoteClusters(es esv1.Elasticsearch) RemoteClustersByName {
+	output := make(RemoteClustersByName)
+	for _, remoteSpec := range es.Spec.RemoteClusters {
+		var seeds []string
+		switch {
+		case remoteSpec.ElasticsearchRef.IsDefined():
+			esKey := remoteSpec.ElasticsearchRef.WithDefaultNamespace(es.Namespace)
+			seeds = []string{services.ExternalTransportServiceHost(esKey.NamespacedName())}
+		default:
+			continue
+		}
+		output[remoteSpec.Name] = esclient.RemoteCluster{Seeds: seeds}
+	}
+	return output
+}
 
 // UpdateSettings updates the remote clusters in the persistent settings by calling the Elasticsearch API.
 func UpdateSettings(
@@ -49,70 +79,49 @@ func UpdateSettings(
 		return nil
 	}
 
-	currentRemoteClusters, err := getCurrentRemoteClusters(es)
+	actual, err := remoteClusterHashesFromAnnotation(es)
 	if err != nil {
 		return err
 	}
-	if currentRemoteClusters == nil {
-		currentRemoteClusters = make(map[string]string)
-	}
-	expectedRemoteClusters := getExpectedRemoteClusters(es)
+	expected := ParseRemoteClusters(es)
 
-	remoteClusters := make(map[string]esclient.RemoteCluster)
+	toUpdate := make(map[string]esclient.RemoteCluster)
 	// RemoteClusters to add or update
-	for name, remoteCluster := range expectedRemoteClusters {
-		if currentConfigHash, ok := currentRemoteClusters[name]; !ok || currentConfigHash != remoteCluster.ConfigHash {
+	for name, remoteCluster := range expected {
+		if !actual.Contains(name, remoteClusterHash(remoteCluster)) {
 			// Declare remote cluster in ES
-			seedHosts := []string{services.ExternalTransportServiceHost(remoteCluster.ElasticsearchRef.NamespacedName())}
 			log.Info("Adding or updating remote cluster",
 				"namespace", es.Namespace,
 				"es_name", es.Name,
-				"remote_cluster", remoteCluster.Name,
-				"seeds", seedHosts,
+				"remote_cluster", name,
+				"seeds", remoteCluster.Seeds,
 			)
-			remoteClusters[name] = esclient.RemoteCluster{Seeds: seedHosts}
+			toUpdate[name] = remoteCluster
 		}
 	}
 
 	// RemoteClusters to remove
-	for name := range currentRemoteClusters {
-		if _, ok := expectedRemoteClusters[name]; !ok {
+	for name := range actual {
+		if _, ok := expected[name]; !ok {
 			log.Info("Removing remote cluster",
 				"namespace", es.Namespace,
 				"es_name", es.Name,
 				"remote_cluster", name,
 			)
-			remoteClusters[name] = esclient.RemoteCluster{Seeds: nil}
-			delete(currentRemoteClusters, name)
+			// set the seeds to nil to remove the remote cluster entry
+			toUpdate[name] = esclient.RemoteCluster{Seeds: nil}
 		}
 	}
 
-	if len(remoteClusters) > 0 {
+	if len(toUpdate) > 0 {
 		// Apply the settings
-		if err := updateSettings(esClient, remoteClusters); err != nil {
+		if err := updateSettings(esClient, toUpdate); err != nil {
 			return err
 		}
 		// Update the annotation
-		return annotateWithRemoteClusters(c, es, expectedRemoteClusters)
+		return annotateWithRemoteClusters(c, es, expected.Hashes())
 	}
 	return nil
-}
-
-// getExpectedRemoteClusters returns a map with the expected remote clusters
-// A map is returned here because it will be used to quickly compare with the ones that are new or missing.
-func getExpectedRemoteClusters(es esv1.Elasticsearch) map[string]expectedRemoteClusterConfiguration {
-	remoteClusters := make(map[string]expectedRemoteClusterConfiguration)
-	for _, remoteCluster := range es.Spec.RemoteClusters {
-		if !remoteCluster.ElasticsearchRef.IsDefined() {
-			continue
-		}
-		remoteCluster.ElasticsearchRef = remoteCluster.ElasticsearchRef.WithDefaultNamespace(es.Namespace)
-		remoteClusters[remoteCluster.Name] = expectedRemoteClusterConfiguration{
-			RemoteCluster: remoteCluster,
-			ConfigHash:    remoteCluster.ConfigHash(),
-		}
-	}
-	return remoteClusters
 }
 
 // updateSettings makes a call to an Elasticsearch cluster to apply a persistent setting.
