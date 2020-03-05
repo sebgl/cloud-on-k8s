@@ -8,6 +8,7 @@ import (
 	"context"
 
 	"github.com/elastic/cloud-on-k8s/pkg/controller/common/tracing"
+
 	"go.elastic.co/apm"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -107,13 +108,72 @@ func ReconcileUsers(
 	if err != nil {
 		return nil, err
 	}
-	elasticUsersRolesSecret, err := NewElasticUsersCredentialsAndRoles(nsn, allUsers, PredefinedRoles)
+
+	userProvidedRoles, err := RetrieveUserProvidedRoles(c, es)
 	if err != nil {
 		return nil, err
 	}
-	if err := ReconcileUserCredentialsSecret(c, scheme, es, elasticUsersRolesSecret); err != nil {
+	roles := PredefinedRoles.MergeWith(userProvidedRoles)
+
+	userProvidedFileRealm, err := RetrieveUserProvidedFileRealm(c, es)
+	if err != nil {
+		return nil, err
+	}
+	predefinedUsers, err := FileRealmFromUsers(allUsers)
+	if err != nil {
+		return nil, err
+	}
+	fileRealm := predefinedUsers.MergeWith(userProvidedFileRealm)
+
+	if err := ReconcileRolesFileRealmSecret(c, es, roles, fileRealm); err != nil {
 		return nil, err
 	}
 
 	return NewInternalUsersFrom(*internalSecrets), nil
 }
+
+//
+//// NewElasticUsersCredentialsAndRoles creates a k8s secret with user credentials and roles readable by ES
+//// for the given users.
+//func NewElasticUsersCredentialsAndRoles(
+//	es types.NamespacedName,
+//	users []common.User,
+//	roles map[string]client.Role,
+//) (*HashedCredentials, error) {
+//
+//	// sort to avoid unnecessary diffs and API resource updates
+//	sort.SliceStable(users, func(i, j int) bool {
+//		return users[i].Id() < users[j].Id()
+//	})
+//
+//	usersFileBytes, err := getUsersFileBytes(users)
+//	if err != nil {
+//		return &HashedCredentials{}, err
+//	}
+//
+//	userRolesFileBytes, err := getUsersRolesFileBytes(users)
+//	if err != nil {
+//		return &HashedCredentials{}, err
+//	}
+//
+//	rolesFileBytes, err := getRolesFileBytes(roles)
+//	if err != nil {
+//		return &HashedCredentials{}, err
+//	}
+//
+//	return &HashedCredentials{
+//		users: users,
+//		secret: corev1.Secret{
+//			ObjectMeta: metav1.ObjectMeta{
+//				Namespace: es.Namespace,
+//				Name:      XPackFileRealmSecretName(es.Name),
+//				Labels:    label.NewLabels(es),
+//			},
+//			Data: map[string][]byte{
+//				ElasticUsersFile:      usersFileBytes,
+//				ElasticUsersRolesFile: userRolesFileBytes,
+//				ElasticRolesFile:      rolesFileBytes,
+//			},
+//		},
+//	}, nil
+//}

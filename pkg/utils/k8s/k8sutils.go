@@ -77,3 +77,15 @@ func EmitErrorEvent(r record.EventRecorder, err error, obj runtime.Object, reaso
 
 	r.Eventf(obj, corev1.EventTypeWarning, reason, message, args...)
 }
+
+// GetSecretEntry returns the value of the secret data for the given key, or nil.
+func GetSecretEntry(secret corev1.Secret, key string) []byte {
+	if secret.Data == nil {
+		return nil
+	}
+	content, exists := secret.Data[key]
+	if !exists {
+		return nil
+	}
+	return content
+}

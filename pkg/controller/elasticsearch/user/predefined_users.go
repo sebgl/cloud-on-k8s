@@ -4,8 +4,7 @@
 
 package user
 
-import "github.com/elastic/cloud-on-k8s/pkg/controller/elasticsearch/client"
-
+// Managed users
 const (
 	// ExternalUserName also known as the 'elastic'
 	ExternalUserName = "elastic"
@@ -13,22 +12,16 @@ const (
 	InternalControllerUserName = "elastic-internal"
 	// InternalProbeUserName is a user to be used from the liveness/readiness probes when interacting with ES.
 	InternalProbeUserName = "elastic-internal-probe"
+)
 
+// Managed roles
+const (
 	// SuperUserBuiltinRole is the name of the built-in superuser role
 	SuperUserBuiltinRole = "superuser"
 	// KibanaSystemUserBuiltinRole is the name of the built-in role for the Kibana system user
 	KibanaSystemUserBuiltinRole = "kibana_system"
 	// ProbeUserRole is the name of the custom elastic_internal_probe_user role
 	ProbeUserRole = "elastic_internal_probe_user"
-)
-
-// Predefined roles.
-var (
-	PredefinedRoles = map[string]client.Role{
-		ProbeUserRole: {
-			Cluster: []string{"monitor"},
-		},
-	}
 )
 
 // newExternalUsers returns new predefined external users.

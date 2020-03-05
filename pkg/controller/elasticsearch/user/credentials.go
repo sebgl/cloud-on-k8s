@@ -6,28 +6,15 @@ package user
 
 import (
 	"bytes"
-	"fmt"
-	"sort"
 	"strings"
 
-	esv1 "github.com/elastic/cloud-on-k8s/pkg/apis/elasticsearch/v1"
-	common "github.com/elastic/cloud-on-k8s/pkg/controller/common/user"
-	"github.com/elastic/cloud-on-k8s/pkg/controller/elasticsearch/client"
-	"github.com/elastic/cloud-on-k8s/pkg/controller/elasticsearch/label"
-	"github.com/ghodss/yaml"
-	pkgerrors "github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-)
 
-const (
-	// ElasticUsersFile is the name of the users file in the ES config dir.
-	ElasticUsersFile = "users"
-	// ElasticUsersRolesFile is the name of the users_roles file in the ES config dir.
-	ElasticUsersRolesFile = "users_roles"
-	// ElasticRolesFile is the name of the roles file in the ES config dir.
-	ElasticRolesFile = "roles.yml"
+	esv1 "github.com/elastic/cloud-on-k8s/pkg/apis/elasticsearch/v1"
+	common "github.com/elastic/cloud-on-k8s/pkg/controller/common/user"
+	"github.com/elastic/cloud-on-k8s/pkg/controller/elasticsearch/label"
 )
 
 // XPackFileRealmSecretName is the name of the secret containing all users and roles information in ES format.
@@ -196,99 +183,47 @@ func usersToClearTextCredentials(es types.NamespacedName, secretName string, use
 	}
 }
 
-// NewElasticUsersCredentialsAndRoles creates a k8s secret with user credentials and roles readable by ES
-// for the given users.
-func NewElasticUsersCredentialsAndRoles(
-	es types.NamespacedName,
-	users []common.User,
-	roles map[string]client.Role,
-) (*HashedCredentials, error) {
+//
+//func getUsersFileBytes(users []common.User) ([]byte, error) {
+//	lines := make([]string, len(users))
+//	for i, user := range users {
+//		hash, err := user.PasswordHash()
+//		if err != nil {
+//			return nil, err
+//		}
+//
+//		lines[i] = user.Id() + ":" + string(hash)
+//	}
+//
+//	return []byte(strings.Join(lines, "\n")), nil
+//}
 
-	// sort to avoid unnecessary diffs and API resource updates
-	sort.SliceStable(users, func(i, j int) bool {
-		return users[i].Id() < users[j].Id()
-	})
-
-	usersFileBytes, err := getUsersFileBytes(users)
-	if err != nil {
-		return &HashedCredentials{}, err
-	}
-
-	userRolesFileBytes, err := getUsersRolesFileBytes(users)
-	if err != nil {
-		return &HashedCredentials{}, err
-	}
-
-	rolesFileBytes, err := getRolesFileBytes(roles)
-	if err != nil {
-		return &HashedCredentials{}, err
-	}
-
-	return &HashedCredentials{
-		users: users,
-		secret: corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: es.Namespace,
-				Name:      XPackFileRealmSecretName(es.Name),
-				Labels:    label.NewLabels(es),
-			},
-			Data: map[string][]byte{
-				ElasticUsersFile:      usersFileBytes,
-				ElasticUsersRolesFile: userRolesFileBytes,
-				ElasticRolesFile:      rolesFileBytes,
-			},
-		},
-	}, nil
-}
-
-func getUsersFileBytes(users []common.User) ([]byte, error) {
-	lines := make([]string, len(users))
-	for i, user := range users {
-		hash, err := user.PasswordHash()
-		if err != nil {
-			return nil, err
-		}
-
-		lines[i] = user.Id() + ":" + string(hash)
-	}
-
-	return []byte(strings.Join(lines, "\n")), nil
-}
-
-func getUsersRolesFileBytes(users []common.User) ([]byte, error) {
-	rolesUsers := map[string][]string{}
-	for _, user := range users {
-		for _, role := range user.Roles() {
-			if role == "" {
-				return nil, pkgerrors.Errorf("role not defined for user `%s`", user.Id())
-			}
-
-			roleUsers := rolesUsers[role]
-			if roleUsers == nil {
-				roleUsers = []string{}
-			}
-			rolesUsers[role] = append(roleUsers, user.Id())
-		}
-	}
-
-	lines := make([]string, 0, len(rolesUsers))
-	for role, users := range rolesUsers {
-		lines = append(lines, fmt.Sprintf("%s:%s", role, strings.Join(users, ",")))
-	}
-
-	// sort to avoid unnecessary diffs and API resource updates
-	sort.SliceStable(lines, func(i, j int) bool {
-		return lines[i] < lines[j]
-	})
-
-	return []byte(strings.Join(lines, "\n")), nil
-}
-
-func getRolesFileBytes(roles map[string]client.Role) ([]byte, error) {
-	rolesYamlBytes, err := yaml.Marshal(roles)
-	if err != nil {
-		return nil, err
-	}
-
-	return rolesYamlBytes, nil
-}
+//
+//func getUsersRolesFileBytes(users []common.User) ([]byte, error) {
+//	rolesUsers := map[string][]string{}
+//	for _, user := range users {
+//		for _, role := range user.Roles() {
+//			if role == "" {
+//				return nil, pkgerrors.Errorf("role not defined for user `%s`", user.Id())
+//			}
+//
+//			roleUsers := rolesUsers[role]
+//			if roleUsers == nil {
+//				roleUsers = []string{}
+//			}
+//			rolesUsers[role] = append(roleUsers, user.Id())
+//		}
+//	}
+//
+//	lines := make([]string, 0, len(rolesUsers))
+//	for role, users := range rolesUsers {
+//		lines = append(lines, fmt.Sprintf("%s:%s", role, strings.Join(users, ",")))
+//	}
+//
+//	// sort to avoid unnecessary diffs and API resource updates
+//	sort.SliceStable(lines, func(i, j int) bool {
+//		return lines[i] < lines[j]
+//	})
+//
+//	return []byte(strings.Join(lines, "\n")), nil
+//}
