@@ -21,6 +21,8 @@ func UserProvidedAuthWatchName(es types.NamespacedName) string {
 	return fmt.Sprintf("%s-%s-user-auth", es.Namespace, es.Name)
 }
 
+// ReconcileUserProvidedAuth returns an aggregated file realm and roles from the referenced sources in the es spec.
+// It also ensures referenced secrets are watched for future reconciliations to be triggered on any change.
 func ReconcileUserProvidedAuth(c k8s.Client, es esv1.Elasticsearch, watched watches.DynamicWatches) (fileRealm, rolesFileContent, error) {
 	// setup watches on user-provided auth secrets
 	esKey := k8s.ExtractNamespacedName(&es)

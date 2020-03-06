@@ -19,7 +19,16 @@ import (
 	"github.com/elastic/cloud-on-k8s/pkg/utils/k8s"
 )
 
-// TODO better doc
+// ReconcileUsersAndRoles fetches all users and roles and aggregates them into a single
+// Kubernetes secret mounted in the Elasticsearch Pods.
+// That secret contains the file realm files (`users` and `users_roles`) and the file roles (`roles.yml`).
+// Users are aggregated from various sources:
+// - predefined users include the controller user, the probe user, and the public-facing elastic user
+// - associated users come from resource associations (eg. Kibana or APMServer)
+// - user-provided users from file realms referenced in the Elasticsearch spec
+// Roles are aggregated from:
+// - predefined roles (for the probe user)
+// - user-provided roles referenced in the Elasticsearch spec
 func ReconcileUsersAndRoles(
 	ctx context.Context,
 	c k8s.Client,
@@ -73,6 +82,6 @@ func ReconcileUsersAndRoles(
 		return client.UserAuth{}, err
 	}
 
-	// return the controller user for next reconciliation steps
+	// return the controller user for next reconciliation steps to interact with Elasticsearch
 	return internalUsers.UserAuth(ControllerUserName)
 }

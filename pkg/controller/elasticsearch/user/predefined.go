@@ -29,6 +29,7 @@ const (
 	ProbeUserName = "elastic-internal-probe"
 )
 
+// reconcileElasticUser reconciles a single secret holding the "elastic" user password.
 func reconcileElasticUser(c k8s.Client, es esv1.Elasticsearch, existingFileRealm fileRealm) (users, error) {
 	return reconcilePredefinedUsers(
 		c,
@@ -41,6 +42,7 @@ func reconcileElasticUser(c k8s.Client, es esv1.Elasticsearch, existingFileRealm
 	)
 }
 
+// reconcileInternalUsers reconciles a single secret holding the internal users passwords.
 func reconcileInternalUsers(c k8s.Client, es esv1.Elasticsearch, existingFileRealm fileRealm) (users, error) {
 	return reconcilePredefinedUsers(
 		c,
@@ -53,6 +55,8 @@ func reconcileInternalUsers(c k8s.Client, es esv1.Elasticsearch, existingFileRea
 		esv1.InternalUsersSecret(es.Name))
 }
 
+// reconcilePredefinedUsers reconciles a secret with the given name holding the given users.
+// It attempts to reuse passwords from pre-existing secrets, and reuse hashes from pre-existing file realms.
 func reconcilePredefinedUsers(
 	c k8s.Client,
 	es esv1.Elasticsearch,
@@ -115,7 +119,7 @@ func reuseOrGeneratePassword(c k8s.Client, users users, secretRef types.Namespac
 	return users, nil
 }
 
-// reuseOrGenerateHash updates the users with existing hashes or generates new ones.
+// reuseOrGenerateHash updates the users with existing hashes from the given file realm, or generates new ones.
 func reuseOrGenerateHash(users users, fileRealm fileRealm) (users, error) {
 	for i, u := range users {
 		existingHash := fileRealm.PasswordHashForUser(u.Name)

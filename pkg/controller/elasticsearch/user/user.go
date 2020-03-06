@@ -10,6 +10,7 @@ import (
 	"github.com/elastic/cloud-on-k8s/pkg/controller/elasticsearch/client"
 )
 
+// user is a convenience struct to represent a file realm user.
 type user struct {
 	Name         string
 	Password     []byte
@@ -17,6 +18,7 @@ type user struct {
 	Roles        []string
 }
 
+// FileRealm builds a filerealm representation of this user.
 func (u user) FileRealm() fileRealm {
 	usersRoles := make(roleUsersMapping, len(u.Roles))
 	for _, role := range u.Roles {
@@ -30,8 +32,10 @@ func (u user) FileRealm() fileRealm {
 	}
 }
 
+// users is just a list of users to which we attach convenience functions.
 type users []user
 
+// FileRealm builds a filerealm representation of the users.
 func (users users) FileRealm() fileRealm {
 	fileRealm := newFileRealm()
 	for _, u := range users {
@@ -40,6 +44,7 @@ func (users users) FileRealm() fileRealm {
 	return fileRealm
 }
 
+// UserAuth returns an Elasticsearch UserAuth struct for the given user.
 func (users users) UserAuth(userName string) (client.UserAuth, error) {
 	for _, u := range users {
 		if u.Name == userName {

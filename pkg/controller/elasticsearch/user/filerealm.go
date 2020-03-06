@@ -32,6 +32,7 @@ func newFileRealm() fileRealm {
 	}
 }
 
+// MergeWith merges multiple file realms together, giving priority to the last provided one.
 func (f fileRealm) MergeWith(others ...fileRealm) fileRealm {
 	for _, other := range others {
 		f.Users = f.Users.MergeWith(other.Users)
@@ -40,6 +41,7 @@ func (f fileRealm) MergeWith(others ...fileRealm) fileRealm {
 	return f
 }
 
+// PasswordHashForUser returns the password hash for the given user, or nil if the user doesn't exist.
 func (f fileRealm) PasswordHashForUser(userName string) []byte {
 	return f.Users[userName]
 }
@@ -47,6 +49,7 @@ func (f fileRealm) PasswordHashForUser(userName string) []byte {
 // usersPasswordHashes is a map {username -> user password hash}
 type usersPasswordHashes map[string][]byte
 
+// MergeWith merges multiple usersPasswordHashes, giving priority to other.
 func (u usersPasswordHashes) MergeWith(other usersPasswordHashes) usersPasswordHashes {
 	for user, hash := range other {
 		u[user] = hash
@@ -54,6 +57,12 @@ func (u usersPasswordHashes) MergeWith(other usersPasswordHashes) usersPasswordH
 	return u
 }
 
+// FileBytes serializes the usersPasswordHashes into a file with format:
+// ```
+// username1:passwordHash1
+// username2:passwordHash2
+// ```
+// Rows are sorted for easier comparison.
 func (u usersPasswordHashes) FileBytes() []byte {
 	rows := make([]string, 0, len(u))
 	for user, hash := range u {
@@ -67,6 +76,12 @@ func (u usersPasswordHashes) FileBytes() []byte {
 // roleUsersMapping is a map {role name -> [] user names}
 type roleUsersMapping map[string][]string
 
+// FileBytes serializes the roleUsersMapping into a file with format:
+// ```
+// role1:user1,user2,user3
+// role2:user1
+// ```
+// Rows are sorted for easier comparison.
 func (r roleUsersMapping) FileBytes() []byte {
 	rows := make([]string, 0, len(r))
 	for role, users := range r {
@@ -78,6 +93,7 @@ func (r roleUsersMapping) FileBytes() []byte {
 	return []byte(strings.Join(rows, "\n") + "\n")
 }
 
+// MergeWith merges multiple usersPasswordHashes, giving priority to other.
 func (r roleUsersMapping) MergeWith(other roleUsersMapping) roleUsersMapping {
 	if len(other) == 0 {
 		return r

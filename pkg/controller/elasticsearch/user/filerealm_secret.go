@@ -20,10 +20,12 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 )
 
+// RolesFileRealmSecretKey is the name of the secret holding the file realm and file-based roles.
 func RolesFileRealmSecretKey(es esv1.Elasticsearch) types.NamespacedName {
 	return types.NamespacedName{Namespace: es.Namespace, Name: esv1.RolesAndFileRealmSecret(es.Name)}
 }
 
+// reconcileRolesFileRealmSecret creates or updates the single secret holding the file realm and the file-based roles.
 func reconcileRolesFileRealmSecret(c k8s.Client, es esv1.Elasticsearch, roles rolesFileContent, fileRealm fileRealm) error {
 	nsn := RolesFileRealmSecretKey(es)
 	rolesBytes, err := roles.FileBytes()
@@ -46,6 +48,7 @@ func reconcileRolesFileRealmSecret(c k8s.Client, es esv1.Elasticsearch, roles ro
 	return err
 }
 
+// fileRealmFromSecret builds a fileRealm from the given secret data.
 func fileRealmFromSecret(c k8s.Client, secretKey types.NamespacedName) (fileRealm, error) {
 	var secret corev1.Secret
 	if err := c.Get(secretKey, &secret); err != nil {
@@ -62,6 +65,12 @@ func fileRealmFromSecret(c k8s.Client, secretKey types.NamespacedName) (fileReal
 	return fileRealm{Users: users, UsersRoles: usersRoles}, nil
 }
 
+// parseFileRealmUsers extracts users and their password hashes from the given secret data.
+// Expected format:
+// ```
+// username1:passwordHash1
+// username2:passwordHash2
+// ```
 func parseFileRealmUsers(data []byte) (usersPasswordHashes, error) {
 	usersHashes := make(usersPasswordHashes)
 	return usersHashes, forEachRow(data, func(row []byte) error {
@@ -76,6 +85,12 @@ func parseFileRealmUsers(data []byte) (usersPasswordHashes, error) {
 	})
 }
 
+// parseFileRealmUsersRoles extracts the role to users mapping from the given secret data.
+// Expected format:
+// ```
+// role1:user1,user2,user3
+// role2:user1
+// ```
 func parseFileRealmUsersRoles(data []byte) (roleUsersMapping, error) {
 	rolesMapping := make(roleUsersMapping)
 	return rolesMapping, forEachRow(data, func(row []byte) error {
@@ -90,6 +105,7 @@ func parseFileRealmUsersRoles(data []byte) (roleUsersMapping, error) {
 	})
 }
 
+// forEachRow applies f to each newline-separated row in the given data.
 func forEachRow(data []byte, f func(row []byte) error) error {
 	rows := bytes.Split(data, []byte("\n"))
 	for _, row := range rows {

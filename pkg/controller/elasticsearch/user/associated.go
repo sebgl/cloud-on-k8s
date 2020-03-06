@@ -22,7 +22,7 @@ func retrieveAssociatedUsers(c k8s.Client, es esv1.Elasticsearch) (users, error)
 		return nil, err
 	}
 
-	// parse secrets content into Users
+	// parse secrets content into users
 	users := make(users, 0, len(associatedUserSecrets.Items))
 	for _, secret := range associatedUserSecrets.Items {
 		u, err := commonuser.NewExternalUserFromSecret(secret)

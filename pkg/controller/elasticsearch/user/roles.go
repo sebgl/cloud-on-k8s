@@ -28,8 +28,11 @@ var (
 )
 
 // rolesFileContent is a map {role name -> yaml role spec}.
+// We care about the role names here, but consider the roles spec as a bag of data we don't need to access.
+// This can be marshalled/unmarshalled to/from the yaml file representation directly.
 type rolesFileContent map[string]interface{}
 
+// MergeWith merges multiple rolesFileContent, giving priority to other.
 func (r rolesFileContent) MergeWith(other rolesFileContent) rolesFileContent {
 	for roleName, roleSpec := range other {
 		r[roleName] = roleSpec
@@ -37,6 +40,9 @@ func (r rolesFileContent) MergeWith(other rolesFileContent) rolesFileContent {
 	return r
 }
 
+// FileBytes returns the file representation of rolesFileContent.
+// Since rolesFileContent already corresponds to an unmarshalled yaml representation of the roles files,
+// we just marshal it back to yaml.
 func (r rolesFileContent) FileBytes() ([]byte, error) {
 	return yaml.Marshal(&r)
 }
