@@ -5,13 +5,44 @@
 package user
 
 import (
+	"fmt"
+
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	esv1 "github.com/elastic/cloud-on-k8s/pkg/apis/elasticsearch/v1"
+	"github.com/elastic/cloud-on-k8s/pkg/controller/common/watches"
 	"github.com/elastic/cloud-on-k8s/pkg/utils/k8s"
 )
+
+// UserProvidedAuthWatchName returns the watch registered for user-provided auth secrets.
+func UserProvidedAuthWatchName(es types.NamespacedName) string {
+	return fmt.Sprintf("%s-%s-user-auth", es.Namespace, es.Name)
+}
+
+func ReconcileUserProvidedAuth(c k8s.Client, es esv1.Elasticsearch, watched watches.DynamicWatches) (fileRealm, rolesFileContent, error) {
+	// setup watches on user-provided auth secrets
+	esKey := k8s.ExtractNamespacedName(&es)
+	if err := watches.WatchUserProvidedSecrets(
+		esKey,
+		watched,
+		UserProvidedAuthWatchName(esKey),
+		es.Spec.Auth.SecretNames(),
+	); err != nil {
+		return fileRealm{}, nil, err
+	}
+	// return user-provided file realm and roles
+	realm, err := retrieveUserProvidedFileRealm(c, es)
+	if err != nil {
+		return fileRealm{}, nil, err
+	}
+	roles, err := retrieveUserProvidedRoles(c, es)
+	if err != nil {
+		return fileRealm{}, nil, err
+	}
+	return realm, roles, nil
+}
 
 // retrieveUserProvidedRoles returns roles parsed from user-provided secrets specified in the es spec.
 func retrieveUserProvidedRoles(c k8s.Client, es esv1.Elasticsearch) (rolesFileContent, error) {

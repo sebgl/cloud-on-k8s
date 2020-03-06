@@ -10,6 +10,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/elastic/cloud-on-k8s/pkg/controller/common/tracing"
+	"github.com/elastic/cloud-on-k8s/pkg/controller/common/watches"
 	"github.com/elastic/cloud-on-k8s/pkg/controller/elasticsearch/client"
 
 	"go.elastic.co/apm"
@@ -19,7 +20,12 @@ import (
 )
 
 // TODO better doc
-func ReconcileUsersAndRoles(ctx context.Context, c k8s.Client, es esv1.Elasticsearch) (client.UserAuth, error) {
+func ReconcileUsersAndRoles(
+	ctx context.Context,
+	c k8s.Client,
+	es esv1.Elasticsearch,
+	watched watches.DynamicWatches,
+) (client.UserAuth, error) {
 	span, _ := apm.StartSpan(ctx, "reconcile_users", tracing.SpanTypeApp)
 	defer span.End()
 
@@ -46,27 +52,23 @@ func ReconcileUsersAndRoles(ctx context.Context, c k8s.Client, es esv1.Elasticse
 	if err != nil {
 		return client.UserAuth{}, err
 	}
-	// fetch user-provided file realm
-	userProvidedFileRealm, err := retrieveUserProvidedFileRealm(c, es)
+
+	// watch & fetch user-provided file realm & roles
+	userProvidedFileRealm, userProvidedRoles, err := ReconcileUserProvidedAuth(c, es, watched)
 	if err != nil {
 		return client.UserAuth{}, err
 	}
-	// build a single merged file realm from all users
+
+	// build single merged file realm & roles
 	fileRealm := newFileRealm().MergeWith(
 		internalUsers.FileRealm(),
 		elasticUser.FileRealm(),
 		associatedUsers.FileRealm(),
 		userProvidedFileRealm, // has priority over the others
 	)
-
-	// merge user-provided roles with predefined ones
-	userProvidedRoles, err := retrieveUserProvidedRoles(c, es)
-	if err != nil {
-		return client.UserAuth{}, err
-	}
 	roles := PredefinedRoles.MergeWith(userProvidedRoles)
 
-	// reconcile the file realm and role secret
+	// reconcile the aggregate secret
 	if err := reconcileRolesFileRealmSecret(c, es, roles, fileRealm); err != nil {
 		return client.UserAuth{}, err
 	}

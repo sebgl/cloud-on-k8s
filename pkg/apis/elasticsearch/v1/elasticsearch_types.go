@@ -97,6 +97,18 @@ type Auth struct {
 	FileRealm []FileRealmSource `json:"fileRealm,omitempty"`
 }
 
+// SecretNames is a convenience function to list all secrets referenced in Auth.
+func (a Auth) SecretNames() []string {
+	names := make([]string, 0, len(a.Roles)+len(a.FileRealm))
+	for _, s := range a.Roles {
+		names = append(names, s.SecretName)
+	}
+	for _, s := range a.FileRealm {
+		names = append(names, s.SecretName)
+	}
+	return names
+}
+
 // RoleSource reference roles to create on the Elasticsearch cluster.
 type RoleSource struct {
 	// SecretName references a Kubernetes secret in the same namespace as the Elasticsearch resource.

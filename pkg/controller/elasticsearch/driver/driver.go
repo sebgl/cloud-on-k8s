@@ -148,7 +148,7 @@ func (d *defaultDriver) Reconcile(ctx context.Context) *reconciler.Results {
 		return results
 	}
 
-	controllerUser, err := user.ReconcileUsersAndRoles(ctx, d.Client, d.ES)
+	controllerUser, err := user.ReconcileUsersAndRoles(ctx, d.Client, d.ES, d.DynamicWatches())
 	if err != nil {
 		return results.WithError(err)
 	}
