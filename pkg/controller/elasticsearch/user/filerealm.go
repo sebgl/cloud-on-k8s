@@ -9,8 +9,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/elastic/cloud-on-k8s/pkg/controller/common/user"
-	"github.com/elastic/cloud-on-k8s/pkg/utils/maps"
 	"github.com/elastic/cloud-on-k8s/pkg/utils/set"
 )
 
@@ -21,45 +19,38 @@ const (
 	ElasticUsersRolesFile = "users_roles"
 )
 
-type FileRealm struct {
+// fileRealm internal representation, containing user password hashes and role mapping
+type fileRealm struct {
 	Users      usersPasswordHashes
 	UsersRoles roleUsersMapping
 }
 
-func (f FileRealm) MergeWith(other FileRealm) FileRealm {
-	return FileRealm{
-		Users:      f.Users.MergeWith(other.Users),
-		UsersRoles: f.UsersRoles.MergeWith(other.UsersRoles),
-	}
-}
-
-func FileRealmFromUsers(users []user.User) (FileRealm, error) {
-	fileRealm := FileRealm{
+func newFileRealm() fileRealm {
+	return fileRealm{
 		Users:      make(usersPasswordHashes),
 		UsersRoles: make(roleUsersMapping),
 	}
-	for _, user := range users {
-		passwordHash, err := user.PasswordHash()
-		if err != nil {
-			return FileRealm{}, err
-		}
-		fileRealm.Users = fileRealm.Users.With(user.Id(), string(passwordHash))
-		for _, role := range user.Roles() {
-			fileRealm.UsersRoles = fileRealm.UsersRoles.With(role, []string{user.Id()})
-		}
+}
+
+func (f fileRealm) MergeWith(others ...fileRealm) fileRealm {
+	for _, other := range others {
+		f.Users = f.Users.MergeWith(other.Users)
+		f.UsersRoles = f.UsersRoles.MergeWith(other.UsersRoles)
 	}
-	return fileRealm, nil
+	return f
+}
+
+func (f fileRealm) PasswordHashForUser(userName string) []byte {
+	return f.Users[userName]
 }
 
 // usersPasswordHashes is a map {username -> user password hash}
-type usersPasswordHashes map[string]string
+type usersPasswordHashes map[string][]byte
 
 func (u usersPasswordHashes) MergeWith(other usersPasswordHashes) usersPasswordHashes {
-	return maps.Merge(u, other)
-}
-
-func (u usersPasswordHashes) With(userName string, passwordHash string) usersPasswordHashes {
-	u[userName] = passwordHash
+	for user, hash := range other {
+		u[user] = hash
+	}
 	return u
 }
 
@@ -104,10 +95,6 @@ func (r roleUsersMapping) MergeWith(other roleUsersMapping) roleUsersMapping {
 		r[otherRole] = userSet.AsSlice()
 	}
 	return r
-}
-
-func (r roleUsersMapping) With(role string, users []string) roleUsersMapping {
-	return r.MergeWith(roleUsersMapping{role: users})
 }
 
 func sortStringSlice(s []string) {

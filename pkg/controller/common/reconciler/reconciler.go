@@ -9,6 +9,7 @@ import (
 	"reflect"
 
 	"github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,6 +20,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/elastic/cloud-on-k8s/pkg/utils/k8s"
+	"github.com/elastic/cloud-on-k8s/pkg/utils/maps"
 )
 
 var (
@@ -133,4 +135,24 @@ func ReconcileResource(params Params) error {
 		}
 	}
 	return nil
+}
+
+func ReconcileSecret(c k8s.Client, owner metav1.Object, scheme *runtime.Scheme, expected corev1.Secret) (corev1.Secret, error) {
+	var reconciled corev1.Secret
+	return reconciled, ReconcileResource(Params{
+		Client:     c,
+		Scheme:     scheme,
+		Owner:      owner,
+		Expected:   &expected,
+		Reconciled: &reconciled,
+		NeedsUpdate: func() bool {
+			// update if secret content is different
+			return !reflect.DeepEqual(expected.Data, reconciled.Data) ||
+				// or expected labels are not there
+				!maps.IsSubset(expected.Labels, reconciled.Labels)
+		},
+		UpdateReconciled: func() {
+			reconciled.Data = expected.Data
+		},
+	})
 }

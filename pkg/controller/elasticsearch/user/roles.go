@@ -5,60 +5,38 @@
 package user
 
 import (
-	"fmt"
-
-	esv1 "github.com/elastic/cloud-on-k8s/pkg/apis/elasticsearch/v1"
 	esclient "github.com/elastic/cloud-on-k8s/pkg/controller/elasticsearch/client"
-	"github.com/elastic/cloud-on-k8s/pkg/utils/k8s"
 
 	"gopkg.in/yaml.v2"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 const (
 	// ElasticRolesFile is the name of the roles file in the ES config dir.
 	ElasticRolesFile = "roles.yml"
+
+	// SuperUserBuiltinRole is the name of the built-in superuser role.
+	SuperUserBuiltinRole = "superuser"
+	// ProbeUserRole is the name of the role used by the internal probe user.
+	ProbeUserRole = "elastic_internal_probe_user"
 )
 
 var (
-	// PredefinedRoles to create for "internal" needs.
-	PredefinedRoles = RolesFileContent{
+	// PredefinedRoles to create for internal needs.
+	PredefinedRoles = rolesFileContent{
 		ProbeUserRole: esclient.Role{Cluster: []string{"monitor"}},
 	}
 )
 
-// RolesFileContent is a map {role name -> yaml role spec}.
-type RolesFileContent map[string]interface{}
+// rolesFileContent is a map {role name -> yaml role spec}.
+type rolesFileContent map[string]interface{}
 
-func (r RolesFileContent) MergeWith(other RolesFileContent) RolesFileContent {
+func (r rolesFileContent) MergeWith(other rolesFileContent) rolesFileContent {
 	for roleName, roleSpec := range other {
 		r[roleName] = roleSpec
 	}
 	return r
 }
 
-func (r RolesFileContent) FileBytes() ([]byte, error) {
-	fmt.Println(r)
+func (r rolesFileContent) FileBytes() ([]byte, error) {
 	return yaml.Marshal(&r)
-}
-
-func RetrieveUserProvidedRoles(c k8s.Client, es esv1.Elasticsearch) (RolesFileContent, error) {
-	roles := make(RolesFileContent)
-	for _, roleSource := range es.Spec.Auth.Roles {
-		if roleSource.SecretName == "" {
-			continue
-		}
-		var secret corev1.Secret
-		if err := c.Get(types.NamespacedName{Namespace: es.Namespace, Name: roleSource.SecretName}, &secret); err != nil {
-			return nil, err
-		}
-		data := k8s.GetSecretEntry(secret, ElasticRolesFile)
-		var parsed RolesFileContent
-		if err := yaml.Unmarshal(data, &parsed); err != nil {
-			return nil, err
-		}
-		roles = roles.MergeWith(parsed)
-	}
-	return roles, nil
 }

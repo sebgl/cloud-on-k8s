@@ -5,76 +5,46 @@
 package user
 
 import (
-	"github.com/elastic/cloud-on-k8s/pkg/controller/common/user"
+	"fmt"
+
 	"github.com/elastic/cloud-on-k8s/pkg/controller/elasticsearch/client"
-	"golang.org/x/crypto/bcrypt"
 )
 
-// User captures Elasticsearch user credentials.
-type User struct {
-	name     string
-	password string
-	roles    []string
+type user struct {
+	Name         string
+	Password     []byte
+	PasswordHash []byte
+	Roles        []string
 }
 
-// Attr an attribute to configure a user struct.
-type Attr func(*User)
-
-// Password sets the password of a new user to pw.
-func Password(pw string) Attr {
-	return func(u *User) {
-		u.password = pw
+func (u user) FileRealm() fileRealm {
+	usersRoles := make(roleUsersMapping, len(u.Roles))
+	for _, role := range u.Roles {
+		usersRoles[role] = []string{u.Name}
+	}
+	return fileRealm{
+		Users: usersPasswordHashes{
+			u.Name: u.PasswordHash,
+		},
+		UsersRoles: usersRoles,
 	}
 }
 
-// Roles sets the roles of a new user to roles.
-func Roles(roles ...string) Attr {
-	return func(u *User) {
-		u.roles = roles
+type users []user
+
+func (users users) FileRealm() fileRealm {
+	fileRealm := newFileRealm()
+	for _, u := range users {
+		fileRealm = fileRealm.MergeWith(u.FileRealm())
 	}
+	return fileRealm
 }
 
-// New creates a new user with the given attributes.
-func New(name string, setters ...Attr) User {
-	result := User{
-		name:     name,
-		password: string(user.RandomPasswordBytes()),
+func (users users) UserAuth(userName string) (client.UserAuth, error) {
+	for _, u := range users {
+		if u.Name == userName {
+			return client.UserAuth{Name: userName, Password: string(u.Password)}, nil
+		}
 	}
-	for _, setter := range setters {
-		setter(&result)
-	}
-	return result
-}
-
-// Id is the user id.
-func (u User) Id() string {
-	return u.name
-}
-
-// PasswordHash computes a password hash and returns it or error.
-func (u User) PasswordHash() ([]byte, error) {
-	return bcrypt.GenerateFromPassword([]byte(u.password), bcrypt.DefaultCost)
-}
-
-// PasswordMatches compares the given hash with the password of this user.
-func (u User) PasswordMatches(hash []byte) bool {
-	return bcrypt.CompareHashAndPassword(hash, []byte(u.password)) == nil
-}
-
-// Password returns the password of this user.
-func (u User) Password() string {
-	return u.password
-}
-
-// Roles returns any roles of this user.
-func (u User) Roles() []string {
-	return u.roles
-}
-
-// Auth creates an auth object for the Elasticsearch client to use.
-func (u User) Auth() client.UserAuth {
-	return client.UserAuth{
-		Name:     u.name,
-		Password: u.password,
-	}
+	return client.UserAuth{}, fmt.Errorf("user %s not found", userName)
 }

@@ -38,7 +38,6 @@ import (
 	"github.com/elastic/cloud-on-k8s/pkg/controller/common/user"
 	"github.com/elastic/cloud-on-k8s/pkg/controller/common/watches"
 	"github.com/elastic/cloud-on-k8s/pkg/controller/elasticsearch/services"
-	elasticsearchuser "github.com/elastic/cloud-on-k8s/pkg/controller/elasticsearch/user"
 	"github.com/elastic/cloud-on-k8s/pkg/controller/kibana/label"
 	kblabel "github.com/elastic/cloud-on-k8s/pkg/controller/kibana/label"
 	"github.com/elastic/cloud-on-k8s/pkg/utils/k8s"
@@ -67,6 +66,8 @@ const (
 	kibanaUserSuffix = "kibana-user"
 	// ElasticsearchCASecretSuffix is used as suffix for CAPublicCertSecretName
 	ElasticsearchCASecretSuffix = "kb-es-ca" // nolint
+	// KibanaSystemUserBuiltinRole is the name of the built-in role for the Kibana system user
+	KibanaSystemUserBuiltinRole = "kibana_system"
 )
 
 var (
@@ -293,7 +294,7 @@ func (r *ReconcileAssociation) reconcileInternal(ctx context.Context, kibana *kb
 			AssociationLabelName:      kibana.Name,
 			AssociationLabelNamespace: kibana.Namespace,
 		},
-		elasticsearchuser.KibanaSystemUserBuiltinRole,
+		KibanaSystemUserBuiltinRole,
 		kibanaUserSuffix,
 		es); err != nil {
 		return commonv1.AssociationPending, err

@@ -5,8 +5,8 @@
 package user
 
 import (
+	"bytes"
 	"fmt"
-	"reflect"
 	"strings"
 
 	esv1 "github.com/elastic/cloud-on-k8s/pkg/apis/elasticsearch/v1"
@@ -20,15 +20,20 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 )
 
-func ReconcileRolesFileRealmSecret(c k8s.Client, es esv1.Elasticsearch, roles RolesFileContent, fileRealm FileRealm) error {
+func RolesFileRealmSecretKey(es esv1.Elasticsearch) types.NamespacedName {
+	return types.NamespacedName{Namespace: es.Namespace, Name: esv1.RolesAndFileRealmSecret(es.Name)}
+}
+
+func reconcileRolesFileRealmSecret(c k8s.Client, es esv1.Elasticsearch, roles rolesFileContent, fileRealm fileRealm) error {
+	nsn := RolesFileRealmSecretKey(es)
 	rolesBytes, err := roles.FileBytes()
 	if err != nil {
 		return err
 	}
 	expected := corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: es.Namespace,
-			Name:      XPackFileRealmSecretName(es.Name),
+			Name:      nsn.Name,
+			Namespace: nsn.Namespace,
 			Labels:    label.NewLabels(k8s.ExtractNamespacedName(&es)),
 		},
 		Data: map[string][]byte{
@@ -37,75 +42,63 @@ func ReconcileRolesFileRealmSecret(c k8s.Client, es esv1.Elasticsearch, roles Ro
 			ElasticRolesFile:      rolesBytes,
 		},
 	}
-	var reconciled corev1.Secret
-	return reconciler.ReconcileResource(reconciler.Params{
-		Client:     c,
-		Scheme:     scheme.Scheme,
-		Owner:      &es,
-		Expected:   &expected,
-		Reconciled: &reconciled,
-		NeedsUpdate: func() bool {
-			return !reflect.DeepEqual(expected.Data, reconciled.Data)
-		},
-		UpdateReconciled: func() {
-			reconciled.Data = expected.Data
-		},
-	})
+	_, err = reconciler.ReconcileSecret(c, &es, scheme.Scheme, expected)
+	return err
 }
 
-// RetrieveUserProvidedFileRealm builds a FileRealm from aggregated user-provided secrets specified in the es spec.
-func RetrieveUserProvidedFileRealm(c k8s.Client, es esv1.Elasticsearch) (FileRealm, error) {
-	fileRealm := FileRealm{
-		Users:      make(usersPasswordHashes),
-		UsersRoles: make(roleUsersMapping),
+func fileRealmFromSecret(c k8s.Client, secretKey types.NamespacedName) (fileRealm, error) {
+	var secret corev1.Secret
+	if err := c.Get(secretKey, &secret); err != nil {
+		return fileRealm{}, err
 	}
-	for _, fileRealmSource := range es.Spec.Auth.FileRealm {
-		if fileRealmSource.SecretName == "" {
-			continue
-		}
-		var secret corev1.Secret
-		if err := c.Get(types.NamespacedName{Namespace: es.Namespace, Name: fileRealmSource.SecretName}, &secret); err != nil {
-			return FileRealm{}, err
-		}
-		users, err := parseFileRealmUsers(k8s.GetSecretEntry(secret, ElasticUsersFile))
-		if err != nil {
-			return FileRealm{}, errors.Wrap(err, fmt.Sprintf("fail to parse users from secret %s", secret.Name))
-		}
-		usersRoles, err := parseFileRealmUsersRoles(k8s.GetSecretEntry(secret, ElasticUsersRolesFile))
-		if err != nil {
-			return FileRealm{}, errors.Wrap(err, fmt.Sprintf("fail to parse users from secret %s", secret.Name))
-		}
-		fileRealm.MergeWith(FileRealm{Users: users, UsersRoles: usersRoles})
+	users, err := parseFileRealmUsers(k8s.GetSecretEntry(secret, ElasticUsersFile))
+	if err != nil {
+		return fileRealm{}, errors.Wrap(err, fmt.Sprintf("fail to parse users from secret %s", secret.Name))
 	}
-	return fileRealm, nil
+	usersRoles, err := parseFileRealmUsersRoles(k8s.GetSecretEntry(secret, ElasticUsersRolesFile))
+	if err != nil {
+		return fileRealm{}, errors.Wrap(err, fmt.Sprintf("fail to parse users roles from secret %s", secret.Name))
+	}
+	return fileRealm{Users: users, UsersRoles: usersRoles}, nil
 }
 
 func parseFileRealmUsers(data []byte) (usersPasswordHashes, error) {
 	usersHashes := make(usersPasswordHashes)
-	rows := strings.Split(string(data), "\n")
-	for _, row := range rows {
-		userHash := strings.Split(row, ":")
+	return usersHashes, forEachRow(data, func(row []byte) error {
+		userHash := bytes.Split(row, []byte(":"))
 		if len(userHash) != 2 {
-			return nil, fmt.Errorf("invalid entry in users")
+			return fmt.Errorf("invalid entry in users")
 		}
-		userName := userHash[0]
-		passwordHash := userHash[1]
-		usersHashes = usersHashes.With(userName, passwordHash)
-	}
-	return usersHashes, nil
+		usersHashes = usersHashes.MergeWith(usersPasswordHashes{
+			string(userHash[0]): userHash[1], // user: password hash
+		})
+		return nil
+	})
 }
 
 func parseFileRealmUsersRoles(data []byte) (roleUsersMapping, error) {
 	rolesMapping := make(roleUsersMapping)
-	rows := strings.Split(string(data), "\n")
-	for _, row := range rows {
-		roleUsers := strings.Split(row, ":")
+	return rolesMapping, forEachRow(data, func(row []byte) error {
+		roleUsers := strings.Split(string(row), ":")
 		if len(roleUsers) != 2 {
-			return nil, fmt.Errorf("invalid entry in users_roles")
+			return fmt.Errorf("invalid entry in users_roles")
 		}
-		role := roleUsers[0]
-		users := strings.Split(roleUsers[1], ",")
-		rolesMapping = rolesMapping.With(role, users)
+		rolesMapping = rolesMapping.MergeWith(roleUsersMapping{
+			roleUsers[0]: strings.Split(roleUsers[1], ","), // user: []roles
+		})
+		return nil
+	})
+}
+
+func forEachRow(data []byte, f func(row []byte) error) error {
+	rows := bytes.Split(data, []byte("\n"))
+	for _, row := range rows {
+		if len(row) == 0 {
+			continue
+		}
+		if err := f(row); err != nil {
+			return err
+		}
 	}
-	return rolesMapping, nil
+	return nil
 }
