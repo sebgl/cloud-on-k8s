@@ -97,10 +97,14 @@ func reuseOrGeneratePassword(c k8s.Client, users users, secretRef types.Namespac
 	if err != nil && !apierrors.IsNotFound(err) {
 		return nil, err
 	}
-	if apierrors.IsNotFound(err) || secret.Data == nil {
-		// no password to reuse
-		return users, nil
+	// default to an empty secret
+	if apierrors.IsNotFound(err) {
+		secret = corev1.Secret{}
 	}
+	if secret.Data == nil {
+		secret.Data = map[string][]byte{}
+	}
+	// either reuse the password or generate a new one
 	for i, u := range users {
 		if password, exists := secret.Data[u.Name]; exists {
 			users[i].Password = password
