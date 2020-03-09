@@ -93,7 +93,7 @@ func (es ElasticsearchSpec) NodeCount() int32 {
 type Auth struct {
 	// Roles to create on the Elasticsearch cluster.
 	Roles []RoleSource `json:"roles,omitempty"`
-	// fileRealm specifies users to create on the Elasticsearch cluster.
+	// FileRealm specifies users to create on the Elasticsearch cluster.
 	FileRealm []FileRealmSource `json:"fileRealm,omitempty"`
 }
 
@@ -112,8 +112,8 @@ func (a Auth) SecretNames() []string {
 // RoleSource reference roles to create on the Elasticsearch cluster.
 type RoleSource struct {
 	// SecretName references a Kubernetes secret in the same namespace as the Elasticsearch resource.
-	// Multiple roles can be specified in a Kubernetes secret. Secret keys are the role names, and values are
-	// the role specification as described in the Elasticsearch documentation:
+	// Multiple roles can be specified in a Kubernetes secret, under a single "roles.yml" key .
+	// The secret value must match the expected file-based specification as described in
 	// https://www.elastic.co/guide/en/elasticsearch/reference/current/defining-roles.html#roles-management-file.
 	//
 	// Example:
@@ -123,17 +123,18 @@ type RoleSource struct {
 	// metadata:
 	// 	name: my-roles
 	// stringData:
-	// 	click_admins: |-
-	// 		run_as: [ 'clicks_watcher_1' ]
-	// 		cluster: [ 'monitor' ]
-	// 		indices:
-	// 		- names: [ 'events-*' ]
-	// 		  privileges: [ 'read' ]
-	// 		  field_security:
-	// 			grant: ['category', '@timestamp', 'message' ]
-	// 		  query: '{"match": {"category": "click"}}'
-	// 	another_role: |-
-	// 		cluster: [ 'all' ]
+	//  roles.yml: |-
+	//    click_admins:
+	//      run_as: [ 'clicks_watcher_1' ]
+	//   	cluster: [ 'monitor' ]
+	//   	indices:
+	//   	- names: [ 'events-*' ]
+	//   	  privileges: [ 'read' ]
+	//   	  field_security:
+	//   		grant: ['category', '@timestamp', 'message' ]
+	//   	  query: '{"match": {"category": "click"}}'
+	//    another_role:
+	//      cluster: [ 'all' ]
 	// ---
 	commonv1.SecretRef `json:",inline"`
 }
