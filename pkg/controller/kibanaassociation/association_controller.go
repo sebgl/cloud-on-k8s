@@ -11,6 +11,7 @@ import (
 
 	"github.com/elastic/cloud-on-k8s/pkg/controller/common/reconciler"
 	"github.com/elastic/cloud-on-k8s/pkg/controller/common/tracing"
+	esuser "github.com/elastic/cloud-on-k8s/pkg/controller/elasticsearch/user"
 	"github.com/elastic/cloud-on-k8s/pkg/utils/rbac"
 	"go.elastic.co/apm"
 	corev1 "k8s.io/api/core/v1"
@@ -55,7 +56,7 @@ import (
 //   the Kibana resource with ES connection details
 // - create the Kibana user for Elasticsearch
 // - copy ES CA public cert secret into Kibana namespace
-// - reconcile on any change from watching Kibana, Elasticsearch, Users and secrets
+// - reconcile on any change from watching Kibana, Elasticsearch, users and secrets
 //
 // If reference to an Elasticsearch cluster is not set in the Kibana resource,
 // this controller does nothing.
@@ -432,7 +433,7 @@ func deleteOrphanedResources(ctx context.Context, c k8s.Client, kibana *kbv1.Kib
 				if err := c.Delete(&s); err != nil && !apierrors.IsNotFound(err) {
 					return err
 				}
-			} else if value, ok := s.Labels[common.TypeLabelName]; ok && value == user.UserType &&
+			} else if value, ok := s.Labels[common.TypeLabelName]; ok && value == esuser.AssociatedUserType &&
 				esRefNamespace != s.Namespace {
 				// User secret may live in an other namespace, check if it has changed
 				log.Info("Deleting secret", "namespace", s.Namespace, "secretname", s.Name, "kibana_name", kibana.Name)

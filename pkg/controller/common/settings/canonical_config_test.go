@@ -83,7 +83,7 @@ func TestCanonicalConfig_MergeWith(t *testing.T) {
 				require.NoError(t, tt.want.Unpack(&wantMap))
 				var gotMap map[string]interface{}
 				require.NoError(t, tt.c.Unpack(&gotMap))
-				t.Errorf("CanonicalConfig.MergeWith() = %v, want %+v, got %+v ", diff, wantMap, gotMap)
+				t.Errorf("CanonicalConfig.mergeWith() = %v, want %+v, got %+v ", diff, wantMap, gotMap)
 			}
 		})
 	}

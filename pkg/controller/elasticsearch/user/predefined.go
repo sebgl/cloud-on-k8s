@@ -16,6 +16,7 @@ import (
 	"github.com/elastic/cloud-on-k8s/pkg/controller/common/reconciler"
 	commonuser "github.com/elastic/cloud-on-k8s/pkg/controller/common/user"
 	"github.com/elastic/cloud-on-k8s/pkg/controller/elasticsearch/label"
+	"github.com/elastic/cloud-on-k8s/pkg/controller/elasticsearch/user/filerealm"
 	"github.com/elastic/cloud-on-k8s/pkg/utils/k8s"
 )
 
@@ -30,7 +31,7 @@ const (
 )
 
 // reconcileElasticUser reconciles a single secret holding the "elastic" user password.
-func reconcileElasticUser(c k8s.Client, es esv1.Elasticsearch, existingFileRealm fileRealm) (users, error) {
+func reconcileElasticUser(c k8s.Client, es esv1.Elasticsearch, existingFileRealm filerealm.Realm) (users, error) {
 	return reconcilePredefinedUsers(
 		c,
 		es,
@@ -43,7 +44,7 @@ func reconcileElasticUser(c k8s.Client, es esv1.Elasticsearch, existingFileRealm
 }
 
 // reconcileInternalUsers reconciles a single secret holding the internal users passwords.
-func reconcileInternalUsers(c k8s.Client, es esv1.Elasticsearch, existingFileRealm fileRealm) (users, error) {
+func reconcileInternalUsers(c k8s.Client, es esv1.Elasticsearch, existingFileRealm filerealm.Realm) (users, error) {
 	return reconcilePredefinedUsers(
 		c,
 		es,
@@ -60,7 +61,7 @@ func reconcileInternalUsers(c k8s.Client, es esv1.Elasticsearch, existingFileRea
 func reconcilePredefinedUsers(
 	c k8s.Client,
 	es esv1.Elasticsearch,
-	existingFileRealm fileRealm,
+	existingFileRealm filerealm.Realm,
 	users users,
 	secretName string,
 ) (users, error) {
@@ -120,7 +121,7 @@ func reuseOrGeneratePassword(c k8s.Client, users users, secretRef types.Namespac
 }
 
 // reuseOrGenerateHash updates the users with existing hashes from the given file realm, or generates new ones.
-func reuseOrGenerateHash(users users, fileRealm fileRealm) (users, error) {
+func reuseOrGenerateHash(users users, fileRealm filerealm.Realm) (users, error) {
 	for i, u := range users {
 		existingHash := fileRealm.PasswordHashForUser(u.Name)
 		if bcrypt.CompareHashAndPassword(existingHash, u.Password) == nil {

@@ -93,7 +93,7 @@ func (es ElasticsearchSpec) NodeCount() int32 {
 type Auth struct {
 	// Roles to create on the Elasticsearch cluster.
 	Roles []RoleSource `json:"roles,omitempty"`
-	// FileRealm specifies users to create on the Elasticsearch cluster.
+	// fileRealm specifies users to create on the Elasticsearch cluster.
 	FileRealm []FileRealmSource `json:"fileRealm,omitempty"`
 }
 

@@ -27,7 +27,7 @@ const (
 	DefaultReqTimeout = 3 * time.Minute
 )
 
-// UserAuth is authentication information for the Elasticsearch client.
+// userAuth is authentication information for the Elasticsearch client.
 type UserAuth struct {
 	Name     string
 	Password string

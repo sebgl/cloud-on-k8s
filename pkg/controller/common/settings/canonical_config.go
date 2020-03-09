@@ -116,7 +116,7 @@ func (c *CanonicalConfig) Unpack(cfg interface{}) error {
 	return c.asUCfg().Unpack(cfg, Options...)
 }
 
-// MergeWith merges the content of c and c2.
+// mergeWith merges the content of c and c2.
 // In case of conflict, c2 is taking precedence.
 func (c *CanonicalConfig) MergeWith(cfgs ...*CanonicalConfig) error {
 	for _, c2 := range cfgs {

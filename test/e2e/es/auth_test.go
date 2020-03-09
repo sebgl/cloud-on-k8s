@@ -19,6 +19,7 @@ import (
 	esv1 "github.com/elastic/cloud-on-k8s/pkg/apis/elasticsearch/v1"
 	esclient "github.com/elastic/cloud-on-k8s/pkg/controller/elasticsearch/client"
 	"github.com/elastic/cloud-on-k8s/pkg/controller/elasticsearch/user"
+	"github.com/elastic/cloud-on-k8s/pkg/controller/elasticsearch/user/filerealm"
 	"github.com/elastic/cloud-on-k8s/pkg/utils/k8s"
 	"github.com/elastic/cloud-on-k8s/test/e2e/test"
 	"github.com/elastic/cloud-on-k8s/test/e2e/test/elasticsearch"
@@ -81,8 +82,8 @@ func TestESUserProvidedAuth(t *testing.T) {
 			Namespace: b.Elasticsearch.Namespace,
 		},
 		StringData: map[string]string{
-			user.ElasticUsersFile:      sampleUsersFile,
-			user.ElasticUsersRolesFile: sampleUsersRolesFile,
+			filerealm.UsersFile:     sampleUsersFile,
+			filerealm.sersRolesFile: sampleUsersRolesFile,
 		},
 	}
 	b.Elasticsearch.Spec.Auth = esv1.Auth{
@@ -138,8 +139,8 @@ func TestESUserProvidedAuth(t *testing.T) {
 					err := k.Client.Get(k8s.ExtractNamespacedName(&fileRealmSecret), &existingSecret)
 					require.NoError(t, err)
 					existingSecret.StringData = map[string]string{
-						user.ElasticUsersFile:      sampleUsersFileUpdated,
-						user.ElasticUsersRolesFile: sampleUsersRolesFile,
+						filerealm.UsersFile:     sampleUsersFileUpdated,
+						filerealm.sersRolesFile: sampleUsersRolesFile,
 					}
 					require.NoError(t, k.Client.Update(&existingSecret))
 				},

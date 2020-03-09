@@ -7,12 +7,12 @@ package user
 import (
 	"fmt"
 
-	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	esv1 "github.com/elastic/cloud-on-k8s/pkg/apis/elasticsearch/v1"
 	"github.com/elastic/cloud-on-k8s/pkg/controller/common/watches"
+	"github.com/elastic/cloud-on-k8s/pkg/controller/elasticsearch/user/filerealm"
 	"github.com/elastic/cloud-on-k8s/pkg/utils/k8s"
 )
 
@@ -23,7 +23,7 @@ func UserProvidedAuthWatchName(es types.NamespacedName) string {
 
 // ReconcileUserProvidedAuth returns an aggregated file realm and roles from the referenced sources in the es spec.
 // It also ensures referenced secrets are watched for future reconciliations to be triggered on any change.
-func ReconcileUserProvidedAuth(c k8s.Client, es esv1.Elasticsearch, watched watches.DynamicWatches) (fileRealm, rolesFileContent, error) {
+func ReconcileUserProvidedAuth(c k8s.Client, es esv1.Elasticsearch, watched watches.DynamicWatches) (filerealm.Realm, RolesFileContent, error) {
 	// setup watches on user-provided auth secrets
 	esKey := k8s.ExtractNamespacedName(&es)
 	if err := watches.WatchUserProvidedSecrets(
@@ -32,23 +32,23 @@ func ReconcileUserProvidedAuth(c k8s.Client, es esv1.Elasticsearch, watched watc
 		UserProvidedAuthWatchName(esKey),
 		es.Spec.Auth.SecretNames(),
 	); err != nil {
-		return fileRealm{}, nil, err
+		return filerealm.Realm{}, nil, err
 	}
 	// return user-provided file realm and roles
 	realm, err := retrieveUserProvidedFileRealm(c, es)
 	if err != nil {
-		return fileRealm{}, nil, err
+		return filerealm.Realm{}, nil, err
 	}
 	roles, err := retrieveUserProvidedRoles(c, es)
 	if err != nil {
-		return fileRealm{}, nil, err
+		return filerealm.Realm{}, nil, err
 	}
 	return realm, roles, nil
 }
 
 // retrieveUserProvidedRoles returns roles parsed from user-provided secrets specified in the es spec.
-func retrieveUserProvidedRoles(c k8s.Client, es esv1.Elasticsearch) (rolesFileContent, error) {
-	roles := make(rolesFileContent)
+func retrieveUserProvidedRoles(c k8s.Client, es esv1.Elasticsearch) (RolesFileContent, error) {
+	roles := make(RolesFileContent)
 	for _, roleSource := range es.Spec.Auth.Roles {
 		if roleSource.SecretName == "" {
 			continue
@@ -58,8 +58,8 @@ func retrieveUserProvidedRoles(c k8s.Client, es esv1.Elasticsearch) (rolesFileCo
 			return nil, err
 		}
 		data := k8s.GetSecretEntry(secret, ElasticRolesFile)
-		var parsed rolesFileContent
-		if err := yaml.Unmarshal(data, &parsed); err != nil {
+		parsed, err := parseRolesFileContent(data)
+		if err != nil {
 			return nil, err
 		}
 		roles = roles.MergeWith(parsed)
@@ -67,17 +67,17 @@ func retrieveUserProvidedRoles(c k8s.Client, es esv1.Elasticsearch) (rolesFileCo
 	return roles, nil
 }
 
-// retrieveUserProvidedFileRealm builds a FileRealm from aggregated user-provided secrets specified in the es spec.
-func retrieveUserProvidedFileRealm(c k8s.Client, es esv1.Elasticsearch) (fileRealm, error) {
-	aggregated := newFileRealm()
+// retrieveUserProvidedFileRealm builds a Realm from aggregated user-provided secrets specified in the es spec.
+func retrieveUserProvidedFileRealm(c k8s.Client, es esv1.Elasticsearch) (filerealm.Realm, error) {
+	aggregated := filerealm.New()
 	for _, fileRealmSource := range es.Spec.Auth.FileRealm {
 		if fileRealmSource.SecretName == "" {
 			continue
 		}
 		secretKey := types.NamespacedName{Namespace: es.Namespace, Name: fileRealmSource.SecretName}
-		realm, err := fileRealmFromSecret(c, secretKey)
+		realm, err := filerealm.FromSecret(c, secretKey)
 		if err != nil {
-			return fileRealm{}, err
+			return filerealm.Realm{}, err
 		}
 		aggregated = aggregated.MergeWith(realm)
 	}

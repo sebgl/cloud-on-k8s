@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/elastic/cloud-on-k8s/pkg/controller/elasticsearch/client"
+	"github.com/elastic/cloud-on-k8s/pkg/controller/elasticsearch/user/filerealm"
 )
 
 // user is a convenience struct to represent a file realm user.
@@ -18,38 +19,46 @@ type user struct {
 	Roles        []string
 }
 
-// FileRealm builds a filerealm representation of this user.
-func (u user) FileRealm() fileRealm {
-	usersRoles := make(roleUsersMapping, len(u.Roles))
+// Realm builds a file realm representation of this user.
+func (u user) fileRealm() filerealm.Realm {
+	realm := filerealm.New().WithUser(u.Name, u.PasswordHash)
 	for _, role := range u.Roles {
-		usersRoles[role] = []string{u.Name}
+		realm = realm.WithRole(role, []string{u.Name})
 	}
-	return fileRealm{
-		Users: usersPasswordHashes{
-			u.Name: u.PasswordHash,
-		},
-		UsersRoles: usersRoles,
-	}
+	return realm
 }
 
 // users is just a list of users to which we attach convenience functions.
 type users []user
 
-// FileRealm builds a filerealm representation of the users.
-func (users users) FileRealm() fileRealm {
-	fileRealm := newFileRealm()
+// Realm builds a filerealm representation of the users.
+func (users users) fileRealm() filerealm.Realm {
+	fileRealm := filerealm.New()
 	for _, u := range users {
-		fileRealm = fileRealm.MergeWith(u.FileRealm())
+		fileRealm = fileRealm.MergeWith(u.fileRealm())
 	}
 	return fileRealm
 }
 
-// UserAuth returns an Elasticsearch UserAuth struct for the given user.
-func (users users) UserAuth(userName string) (client.UserAuth, error) {
+// userAuth returns an Elasticsearch userAuth struct for the given user.
+func (users users) userAuth(userName string) (client.UserAuth, error) {
 	for _, u := range users {
 		if u.Name == userName {
 			return client.UserAuth{Name: userName, Password: string(u.Password)}, nil
 		}
 	}
 	return client.UserAuth{}, fmt.Errorf("user %s not found", userName)
+}
+
+// fromAssociatedUsers returns a list of user from the given associated users.
+func fromAssociatedUsers(associatedUsers []AssociatedUser) users {
+	users := make(users, 0, len(associatedUsers))
+	for _, u := range associatedUsers {
+		users = append(users, user{
+			Name:         u.Name,
+			PasswordHash: u.PasswordHash,
+			Roles:        u.Roles,
+		})
+	}
+	return users
 }

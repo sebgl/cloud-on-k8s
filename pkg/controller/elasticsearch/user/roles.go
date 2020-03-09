@@ -22,27 +22,35 @@ const (
 
 var (
 	// PredefinedRoles to create for internal needs.
-	PredefinedRoles = rolesFileContent{
+	PredefinedRoles = RolesFileContent{
 		ProbeUserRole: esclient.Role{Cluster: []string{"monitor"}},
 	}
 )
 
-// rolesFileContent is a map {role name -> yaml role spec}.
-// We care about the role names here, but consider the roles spec as a bag of data we don't need to access.
-// This can be marshalled/unmarshalled to/from the yaml file representation directly.
-type rolesFileContent map[string]interface{}
+// RolesFileContent is a map {role name -> yaml role spec}.
+// We care about the role names here, but consider the roles spec as a yaml blob we don't need to access.
+type RolesFileContent map[string]interface{}
 
-// MergeWith merges multiple rolesFileContent, giving priority to other.
-func (r rolesFileContent) MergeWith(other rolesFileContent) rolesFileContent {
+// parseRolesFileContent returns a RolesFileContent from the given data.
+// Since rolesFileContent already corresponds to a deserialized yaml representation of the roles files,
+// we just unmarshal from the yaml data.
+func parseRolesFileContent(data []byte) (RolesFileContent, error) {
+	var parsed RolesFileContent
+	err := yaml.Unmarshal(data, &parsed)
+	return parsed, err
+}
+
+// fileBytes returns the file representation of rolesFileContent.
+// Since rolesFileContent already corresponds to a deserialized yaml representation of the roles files,
+// we just marshal it back to yaml.
+func (r RolesFileContent) FileBytes() ([]byte, error) {
+	return yaml.Marshal(&r)
+}
+
+// mergeWith merges multiple rolesFileContent, giving priority to other.
+func (r RolesFileContent) MergeWith(other RolesFileContent) RolesFileContent {
 	for roleName, roleSpec := range other {
 		r[roleName] = roleSpec
 	}
 	return r
-}
-
-// FileBytes returns the file representation of rolesFileContent.
-// Since rolesFileContent already corresponds to an unmarshalled yaml representation of the roles files,
-// we just marshal it back to yaml.
-func (r rolesFileContent) FileBytes() ([]byte, error) {
-	return yaml.Marshal(&r)
 }
