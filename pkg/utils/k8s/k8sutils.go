@@ -9,10 +9,12 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // ToObjectMeta returns an ObjectMeta based on the given NamespacedName.
@@ -88,4 +90,18 @@ func GetSecretEntry(secret corev1.Secret, key string) []byte {
 		return nil
 	}
 	return content
+}
+
+// DeleteSecretMatching deletes the Secret matching the provided selectors.
+func DeleteSecretMatching(c Client, opts ...client.ListOption) error {
+	var secrets corev1.SecretList
+	if err := c.List(&secrets, opts...); err != nil {
+		return err
+	}
+	for _, s := range secrets.Items {
+		if err := c.Delete(&s); err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+	}
+	return nil
 }

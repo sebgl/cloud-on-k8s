@@ -36,7 +36,6 @@ import (
 	"github.com/elastic/cloud-on-k8s/pkg/controller/common/certificates/http"
 	"github.com/elastic/cloud-on-k8s/pkg/controller/common/events"
 	"github.com/elastic/cloud-on-k8s/pkg/controller/common/operator"
-	"github.com/elastic/cloud-on-k8s/pkg/controller/common/user"
 	"github.com/elastic/cloud-on-k8s/pkg/controller/common/watches"
 	"github.com/elastic/cloud-on-k8s/pkg/controller/elasticsearch/services"
 	"github.com/elastic/cloud-on-k8s/pkg/controller/kibana/label"
@@ -129,7 +128,7 @@ func (r *ReconcileAssociation) onDelete(obj types.NamespacedName) error {
 	r.watches.ElasticsearchClusters.RemoveHandlerForKey(elasticsearchWatchName(obj))
 	r.watches.Secrets.RemoveHandlerForKey(esCAWatchName(obj))
 	// Delete user
-	return user.DeleteUser(r.Client, NewUserLabelSelector(obj))
+	return k8s.DeleteSecretMatching(r.Client, NewUserLabelSelector(obj))
 }
 
 // Reconcile reads that state of the cluster for an Association object and makes changes based on the state read and what is in
@@ -342,7 +341,7 @@ func (r *ReconcileAssociation) updateAssociationConf(ctx context.Context, expect
 func (r *ReconcileAssociation) Unbind(kibana commonv1.Associated) error {
 	kibanaKey := k8s.ExtractNamespacedName(kibana)
 	// Ensure that user in Elasticsearch is deleted to prevent illegitimate access
-	if err := user.DeleteUser(r.Client, NewUserLabelSelector(kibanaKey)); err != nil {
+	if err := k8s.DeleteSecretMatching(r.Client, NewUserLabelSelector(kibanaKey)); err != nil {
 		return err
 	}
 	// Also remove the association configuration

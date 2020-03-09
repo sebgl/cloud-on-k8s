@@ -501,7 +501,7 @@ spec:
                 settings for Elasticsearch.
               properties:
                 fileRealm:
-                  description: FileRealm specifies users to create on the Elasticsearch
+                  description: fileRealm specifies users to create on the Elasticsearch
                     cluster.
                   items:
                     description: FileRealmSource reference users to create on the

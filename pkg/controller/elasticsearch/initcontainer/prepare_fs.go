@@ -63,8 +63,8 @@ var (
 				Target: stringsutil.Concat(EsConfigSharedVolume.EsContainerMountPath, "/", filerealm.UsersFile),
 			},
 			{
-				Source: stringsutil.Concat(esvolume.XPackFileRealmVolumeMountPath, "/", user.ElasticRolesFile),
-				Target: stringsutil.Concat(EsConfigSharedVolume.EsContainerMountPath, "/", user.ElasticRolesFile),
+				Source: stringsutil.Concat(esvolume.XPackFileRealmVolumeMountPath, "/", user.RolesFile),
+				Target: stringsutil.Concat(EsConfigSharedVolume.EsContainerMountPath, "/", user.RolesFile),
 			},
 			{
 				Source: stringsutil.Concat(esvolume.XPackFileRealmVolumeMountPath, "/", filerealm.UsersRolesFile),

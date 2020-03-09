@@ -6,14 +6,7 @@ package filerealm
 
 import (
 	"bytes"
-	"sort"
 )
-
-func sortStringSlice(s []string) {
-	sort.SliceStable(s, func(i, j int) bool {
-		return s[i] < s[j]
-	})
-}
 
 // forEachRow applies f to each newline-separated row in the given data.
 func forEachRow(data []byte, f func(row []byte) error) error {

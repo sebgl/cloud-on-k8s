@@ -13,20 +13,20 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 
 	esv1 "github.com/elastic/cloud-on-k8s/pkg/apis/elasticsearch/v1"
+	"github.com/elastic/cloud-on-k8s/pkg/controller/common"
 	"github.com/elastic/cloud-on-k8s/pkg/controller/common/reconciler"
-	commonuser "github.com/elastic/cloud-on-k8s/pkg/controller/common/user"
 	"github.com/elastic/cloud-on-k8s/pkg/controller/elasticsearch/label"
 	"github.com/elastic/cloud-on-k8s/pkg/controller/elasticsearch/user/filerealm"
 	"github.com/elastic/cloud-on-k8s/pkg/utils/k8s"
 )
 
 const (
-	// ElasticUserName is a public-facing user.
+	// ElasticUserName is the public-facing user.
 	ElasticUserName = "elastic"
 
-	// ControllerUserName a user to be used from this controller when interacting with ES.
+	// ControllerUserName is the controller user to interact with ES.
 	ControllerUserName = "elastic-internal"
-	// ProbeUserName is a user to be used from the liveness/readiness probes when interacting with ES.
+	// ProbeUserName is used for the Elasticsearch readiness probe.
 	ProbeUserName = "elastic-internal-probe"
 )
 
@@ -114,7 +114,7 @@ func reuseOrGeneratePassword(c k8s.Client, users users, secretRef types.Namespac
 		if password, exists := secret.Data[u.Name]; exists {
 			users[i].Password = password
 		} else {
-			users[i].Password = commonuser.RandomPasswordBytes()
+			users[i].Password = common.RandomPasswordBytes()
 		}
 	}
 	return users, nil

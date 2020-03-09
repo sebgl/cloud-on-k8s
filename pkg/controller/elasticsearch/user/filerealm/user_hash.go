@@ -8,6 +8,8 @@ import (
 	"bytes"
 	"fmt"
 	"strings"
+
+	"github.com/elastic/cloud-on-k8s/pkg/utils/stringsutil"
 )
 
 // usersPasswordHashes is a map {username -> user password hash}
@@ -36,7 +38,7 @@ func (u usersPasswordHashes) fileBytes() []byte {
 		rows = append(rows, fmt.Sprintf("%s:%s", user, hash))
 	}
 	// sort for consistent comparison
-	sortStringSlice(rows)
+	stringsutil.SortStringSlice(rows)
 	return []byte(strings.Join(rows, "\n") + "\n")
 }
 

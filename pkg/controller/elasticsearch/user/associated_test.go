@@ -16,7 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	esv1 "github.com/elastic/cloud-on-k8s/pkg/apis/elasticsearch/v1"
-	commonuser "github.com/elastic/cloud-on-k8s/pkg/controller/common/user"
 	"github.com/elastic/cloud-on-k8s/pkg/utils/k8s"
 )
 
@@ -41,7 +40,7 @@ func Test_retrieveAssociatedUsers(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: es.Namespace,
 						Name:      "user1",
-						Labels:    commonuser.NewLabelSelectorForElasticsearch(es),
+						Labels:    AssociatedUserLabels(es),
 					},
 					Data: map[string][]byte{
 						UserNameField:     []byte("user1"),
@@ -53,7 +52,7 @@ func Test_retrieveAssociatedUsers(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: es.Namespace,
 						Name:      "user2",
-						Labels:    commonuser.NewLabelSelectorForElasticsearch(es),
+						Labels:    AssociatedUserLabels(es),
 					},
 					Data: map[string][]byte{
 						UserNameField:     []byte("user2"),

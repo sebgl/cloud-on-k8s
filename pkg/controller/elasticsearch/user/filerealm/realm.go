@@ -91,3 +91,12 @@ func (f Realm) FileBytes() map[string][]byte {
 		UsersRolesFile: f.usersRoles.fileBytes(),
 	}
 }
+
+// fileBytes returns the list of user names in this file realm.
+func (f Realm) UserNames() []string {
+	names := make([]string, 0, len(f.users))
+	for name := range f.users {
+		names = append(names, name)
+	}
+	return names
+}

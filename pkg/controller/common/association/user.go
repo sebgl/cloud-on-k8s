@@ -15,12 +15,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 
+	"github.com/elastic/cloud-on-k8s/pkg/controller/common"
 	"github.com/elastic/cloud-on-k8s/pkg/controller/common/tracing"
 
 	commonv1 "github.com/elastic/cloud-on-k8s/pkg/apis/common/v1"
 	esv1 "github.com/elastic/cloud-on-k8s/pkg/apis/elasticsearch/v1"
 	"github.com/elastic/cloud-on-k8s/pkg/controller/common/reconciler"
-	commonuser "github.com/elastic/cloud-on-k8s/pkg/controller/common/user"
 	esuser "github.com/elastic/cloud-on-k8s/pkg/controller/elasticsearch/user"
 	"github.com/elastic/cloud-on-k8s/pkg/utils/k8s"
 )
@@ -86,7 +86,7 @@ func ReconcileEsUser(
 	span, _ := apm.StartSpan(ctx, "reconcile_es_user", tracing.SpanTypeApp)
 	defer span.End()
 
-	pw := commonuser.RandomPasswordBytes()
+	pw := common.RandomPasswordBytes()
 
 	secKey := secretKey(associated, userObjectSuffix)
 	usrKey := UserKey(associated, userObjectSuffix)

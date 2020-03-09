@@ -80,3 +80,93 @@ func Test_users_UserAuth(t *testing.T) {
 	_, err = users.userAuth("unknown-user")
 	require.Error(t, err, "user unknown-user not found")
 }
+
+func Test_user_fileRealm(t *testing.T) {
+	user := user{
+		Name:         "username",
+		Password:     []byte("password"),
+		PasswordHash: []byte("passwordhash"),
+		Roles:        []string{"role1", "role2"},
+	}
+	expected := filerealm.New().
+		WithUser("username", []byte("passwordhash")).
+		WithRole("role1", []string{"username"}).
+		WithRole("role2", []string{"username"})
+	require.Equal(t, expected, user.fileRealm())
+}
+
+func Test_users_fileRealm(t *testing.T) {
+	users := users{
+		{
+			Name:         "username",
+			Password:     []byte("password"),
+			PasswordHash: []byte("passwordhash"),
+			Roles:        []string{"role1", "role2"},
+		},
+		{
+			Name:         "username2",
+			Password:     []byte("password2"),
+			PasswordHash: []byte("passwordhash2"),
+			Roles:        []string{"role1", "role3"},
+		},
+	}
+	expected := filerealm.New().
+		WithUser("username", []byte("passwordhash")).
+		WithUser("username2", []byte("passwordhash2")).
+		WithRole("role1", []string{"username", "username2"}).
+		WithRole("role2", []string{"username"}).
+		WithRole("role3", []string{"username2"})
+	require.Equal(t, expected, users.fileRealm())
+}
+
+func Test_users_userAuth(t *testing.T) {
+	users := users{
+		{
+			Name:         "username",
+			Password:     []byte("password"),
+			PasswordHash: []byte("passwordhash"),
+			Roles:        []string{"role1", "role2"},
+		},
+		{
+			Name:         "username2",
+			Password:     []byte("password2"),
+			PasswordHash: []byte("passwordhash2"),
+			Roles:        []string{"role1", "role3"},
+		},
+	}
+	expected := esclient.UserAuth{
+		Name:     "username2",
+		Password: "password2",
+	}
+	actual, err := users.userAuth("username2")
+	require.NoError(t, err)
+	require.Equal(t, expected, actual)
+}
+
+func Test_fromAssociatedUsers(t *testing.T) {
+	associatedUsers := []AssociatedUser{
+		{
+			Name:         "user1",
+			PasswordHash: []byte("hash1"),
+			Roles:        []string{"role1", "role2"},
+		},
+		{
+			Name:         "user2",
+			PasswordHash: []byte("hash2"),
+			Roles:        []string{"role1", "role2"},
+		},
+	}
+	expected := users{
+		{
+			Name:         "user1",
+			PasswordHash: []byte("hash1"),
+			Roles:        []string{"role1", "role2"},
+		},
+		{
+			Name:         "user2",
+			PasswordHash: []byte("hash2"),
+			Roles:        []string{"role1", "role2"},
+		},
+	}
+	require.Equal(t, expected, fromAssociatedUsers(associatedUsers))
+}

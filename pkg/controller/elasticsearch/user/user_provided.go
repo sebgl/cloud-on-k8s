@@ -16,34 +16,44 @@ import (
 	"github.com/elastic/cloud-on-k8s/pkg/utils/k8s"
 )
 
-// UserProvidedAuthWatchName returns the watch registered for user-provided auth secrets.
-func UserProvidedAuthWatchName(es types.NamespacedName) string {
-	return fmt.Sprintf("%s-%s-user-auth", es.Namespace, es.Name)
+// UserProvidedFileRealmWatchName returns the watch registered for user-provided file realm secrets.
+func UserProvidedFileRealmWatchName(es types.NamespacedName) string {
+	return fmt.Sprintf("%s-%s-user-file-realm", es.Namespace, es.Name)
 }
 
-// ReconcileUserProvidedAuth returns an aggregated file realm and roles from the referenced sources in the es spec.
+// UserProvidedRolesWatchName returns the watch registered for user-provided roles secrets.
+func UserProvidedRolesWatchName(es types.NamespacedName) string {
+	return fmt.Sprintf("%s-%s-user-roles", es.Namespace, es.Name)
+}
+
+// ReconcileUserProvidedAuth returns the aggregate file realm from the referenced sources in the es spec.
 // It also ensures referenced secrets are watched for future reconciliations to be triggered on any change.
-func ReconcileUserProvidedAuth(c k8s.Client, es esv1.Elasticsearch, watched watches.DynamicWatches) (filerealm.Realm, RolesFileContent, error) {
-	// setup watches on user-provided auth secrets
+func reconcileUserProvidedFileRealm(c k8s.Client, es esv1.Elasticsearch, watched watches.DynamicWatches) (filerealm.Realm, error) {
 	esKey := k8s.ExtractNamespacedName(&es)
 	if err := watches.WatchUserProvidedSecrets(
 		esKey,
 		watched,
-		UserProvidedAuthWatchName(esKey),
+		UserProvidedFileRealmWatchName(esKey),
 		es.Spec.Auth.SecretNames(),
 	); err != nil {
-		return filerealm.Realm{}, nil, err
+		return filerealm.Realm{}, err
 	}
-	// return user-provided file realm and roles
-	realm, err := retrieveUserProvidedFileRealm(c, es)
-	if err != nil {
-		return filerealm.Realm{}, nil, err
+	return retrieveUserProvidedFileRealm(c, es)
+}
+
+// ReconcileUserProvidedAuth returns aggregate roles from the referenced sources in the es spec.
+// It also ensures referenced secrets are watched for future reconciliations to be triggered on any change.
+func reconcileUserProvidedRoles(c k8s.Client, es esv1.Elasticsearch, watched watches.DynamicWatches) (RolesFileContent, error) {
+	esKey := k8s.ExtractNamespacedName(&es)
+	if err := watches.WatchUserProvidedSecrets(
+		esKey,
+		watched,
+		UserProvidedRolesWatchName(esKey),
+		es.Spec.Auth.SecretNames(),
+	); err != nil {
+		return RolesFileContent{}, err
 	}
-	roles, err := retrieveUserProvidedRoles(c, es)
-	if err != nil {
-		return filerealm.Realm{}, nil, err
-	}
-	return realm, roles, nil
+	return retrieveUserProvidedRoles(c, es)
 }
 
 // retrieveUserProvidedRoles returns roles parsed from user-provided secrets specified in the es spec.
@@ -57,7 +67,7 @@ func retrieveUserProvidedRoles(c k8s.Client, es esv1.Elasticsearch) (RolesFileCo
 		if err := c.Get(types.NamespacedName{Namespace: es.Namespace, Name: roleSource.SecretName}, &secret); err != nil {
 			return nil, err
 		}
-		data := k8s.GetSecretEntry(secret, ElasticRolesFile)
+		data := k8s.GetSecretEntry(secret, RolesFile)
 		parsed, err := parseRolesFileContent(data)
 		if err != nil {
 			return nil, err

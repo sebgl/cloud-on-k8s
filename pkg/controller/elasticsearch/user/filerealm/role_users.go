@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/elastic/cloud-on-k8s/pkg/utils/set"
+	"github.com/elastic/cloud-on-k8s/pkg/utils/stringsutil"
 )
 
 // roleUsersMapping is a map {role name -> [] user names}
@@ -33,7 +34,7 @@ func (r roleUsersMapping) mergeWith(other roleUsersMapping) roleUsersMapping {
 		userSet := set.Make(currentUsers...)
 		userSet.MergeWith(set.Make(otherUsers...))
 		userSlice := userSet.AsSlice()
-		sortStringSlice(userSlice)
+		stringsutil.SortStringSlice(userSlice)
 		r[otherRole] = userSlice
 	}
 	return r
@@ -48,11 +49,11 @@ func (r roleUsersMapping) mergeWith(other roleUsersMapping) roleUsersMapping {
 func (r roleUsersMapping) fileBytes() []byte {
 	rows := make([]string, 0, len(r))
 	for role, users := range r {
-		sortStringSlice(users)
+		stringsutil.SortStringSlice(users)
 		rows = append(rows, fmt.Sprintf("%s:%s", role, strings.Join(users, ",")))
 	}
 	// sort for consistent comparison
-	sortStringSlice(rows)
+	stringsutil.SortStringSlice(rows)
 	return []byte(strings.Join(rows, "\n") + "\n")
 }
 

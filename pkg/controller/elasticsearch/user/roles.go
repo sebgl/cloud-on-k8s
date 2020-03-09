@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	// ElasticRolesFile is the name of the roles file in the ES config dir.
-	ElasticRolesFile = "roles.yml"
+	// RolesFile is the name of the roles file in the ES config dir.
+	RolesFile = "roles.yml"
 
 	// SuperUserBuiltinRole is the name of the built-in superuser role.
 	SuperUserBuiltinRole = "superuser"

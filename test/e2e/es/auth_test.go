@@ -71,7 +71,7 @@ func TestESUserProvidedAuth(t *testing.T) {
 			Namespace: b.Elasticsearch.Namespace,
 		},
 		StringData: map[string]string{
-			user.ElasticRolesFile: sampleRolesFile(writeIndex),
+			user.RolesFile: sampleRolesFile(writeIndex),
 		},
 	}
 	// setup our own file realm through a secret ref
@@ -82,8 +82,8 @@ func TestESUserProvidedAuth(t *testing.T) {
 			Namespace: b.Elasticsearch.Namespace,
 		},
 		StringData: map[string]string{
-			filerealm.UsersFile:     sampleUsersFile,
-			filerealm.sersRolesFile: sampleUsersRolesFile,
+			filerealm.UsersFile:      sampleUsersFile,
+			filerealm.UsersRolesFile: sampleUsersRolesFile,
 		},
 	}
 	b.Elasticsearch.Spec.Auth = esv1.Auth{
@@ -139,8 +139,8 @@ func TestESUserProvidedAuth(t *testing.T) {
 					err := k.Client.Get(k8s.ExtractNamespacedName(&fileRealmSecret), &existingSecret)
 					require.NoError(t, err)
 					existingSecret.StringData = map[string]string{
-						filerealm.UsersFile:     sampleUsersFileUpdated,
-						filerealm.sersRolesFile: sampleUsersRolesFile,
+						filerealm.UsersFile:      sampleUsersFileUpdated,
+						filerealm.UsersRolesFile: sampleUsersRolesFile,
 					}
 					require.NoError(t, k.Client.Update(&existingSecret))
 				},
@@ -152,7 +152,7 @@ func TestESUserProvidedAuth(t *testing.T) {
 					err := k.Client.Get(k8s.ExtractNamespacedName(&rolesSecret), &existingSecret)
 					require.NoError(t, err)
 					existingSecret.StringData = map[string]string{
-						user.ElasticRolesFile: sampleRolesFile(writeIndexUpdated),
+						user.RolesFile: sampleRolesFile(writeIndexUpdated),
 					}
 					require.NoError(t, k.Client.Update(&existingSecret))
 				},

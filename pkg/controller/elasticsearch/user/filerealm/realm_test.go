@@ -12,7 +12,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	"github.com/elastic/cloud-on-k8s/pkg/controller/elasticsearch/user"
 	"github.com/elastic/cloud-on-k8s/pkg/utils/k8s"
 )
 
@@ -49,8 +48,6 @@ func Test_FromSecret(t *testing.T) {
 	secret := corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "fileRealmSecret"},
 		Data: map[string][]byte{
-			user.ElasticRolesFile: []byte(`another_role:
-cluster: [ 'all' ]`),
 			UsersRolesFile: []byte(`role1:user1,user2
 role2:user1
 role3:`),

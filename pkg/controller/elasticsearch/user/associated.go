@@ -39,6 +39,7 @@ type AssociatedUser struct {
 	Roles        []string
 }
 
+// AssociatedUserLabels returns labels matching associated users for the given es resource.
 func AssociatedUserLabels(es esv1.Elasticsearch) map[string]string {
 	return map[string]string{
 		label.ClusterNameLabelName: es.Name,

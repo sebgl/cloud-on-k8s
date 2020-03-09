@@ -17,6 +17,7 @@ import (
 	"github.com/elastic/cloud-on-k8s/pkg/controller/common/tracing"
 	"github.com/elastic/cloud-on-k8s/pkg/controller/common/watches"
 	"github.com/elastic/cloud-on-k8s/pkg/controller/elasticsearch/client"
+	esclient "github.com/elastic/cloud-on-k8s/pkg/controller/elasticsearch/client"
 	"github.com/elastic/cloud-on-k8s/pkg/controller/elasticsearch/label"
 	"github.com/elastic/cloud-on-k8s/pkg/controller/elasticsearch/user/filerealm"
 
@@ -45,52 +46,85 @@ func ReconcileUsersAndRoles(
 	span, _ := apm.StartSpan(ctx, "reconcile_users", tracing.SpanTypeApp)
 	defer span.End()
 
+	// build aggregate roles and file realms
+	roles, err := aggregateRoles(c, es, watched)
+	if err != nil {
+		return client.UserAuth{}, err
+	}
+	fileRealm, controllerUser, err := aggregateFileRealm(c, es, watched)
+	if err != nil {
+		return client.UserAuth{}, err
+	}
+
+	// reconcile the aggregate secret
+	if err := reconcileRolesFileRealmSecret(c, es, roles, fileRealm); err != nil {
+		return client.UserAuth{}, err
+	}
+
+	// return the controller user for next reconciliation steps to interact with Elasticsearch
+	return controllerUser, nil
+}
+
+// aggregateFileRealm aggregates the various file realms into a single one, and returns the controller user auth.
+func aggregateFileRealm(
+	c k8s.Client,
+	es esv1.Elasticsearch,
+	watched watches.DynamicWatches,
+) (filerealm.Realm, esclient.UserAuth, error) {
 	// retrieve existing file realm to reuse predefined users password hashes if possible
 	existingFileRealm, err := filerealm.FromSecret(c, RolesFileRealmSecretKey(es))
 	if err != nil && apierrors.IsNotFound(err) {
 		// no secret yet, work with an empty file realm
 		existingFileRealm = filerealm.New()
 	} else if err != nil {
-		return client.UserAuth{}, err
+		return filerealm.Realm{}, esclient.UserAuth{}, err
 	}
 
 	// reconcile predefined users
-	internalUsers, err := reconcileInternalUsers(c, es, existingFileRealm)
-	if err != nil {
-		return client.UserAuth{}, err
-	}
 	elasticUser, err := reconcileElasticUser(c, es, existingFileRealm)
 	if err != nil {
-		return client.UserAuth{}, err
+		return filerealm.Realm{}, esclient.UserAuth{}, err
 	}
+	internalUsers, err := reconcileInternalUsers(c, es, existingFileRealm)
+	if err != nil {
+		return filerealm.Realm{}, esclient.UserAuth{}, err
+	}
+	// grab the controller user auth for later use
+	controllerUserAuth, err := internalUsers.userAuth(ControllerUserName)
+	if err != nil {
+		return filerealm.Realm{}, esclient.UserAuth{}, err
+	}
+
 	// fetch associated users
 	associatedUsers, err := retrieveAssociatedUsers(c, es)
 	if err != nil {
-		return client.UserAuth{}, err
+		return filerealm.Realm{}, esclient.UserAuth{}, err
 	}
 
 	// watch & fetch user-provided file realm & roles
-	userProvidedFileRealm, userProvidedRoles, err := ReconcileUserProvidedAuth(c, es, watched)
+	userProvidedFileRealm, err := reconcileUserProvidedFileRealm(c, es, watched)
 	if err != nil {
-		return client.UserAuth{}, err
+		return filerealm.Realm{}, esclient.UserAuth{}, err
 	}
 
-	// build single merged file realm & roles
+	// merge all file realm together, the last one having precedence
 	fileRealm := filerealm.MergedFrom(
 		internalUsers.fileRealm(),
 		elasticUser.fileRealm(),
 		associatedUsers.fileRealm(),
-		userProvidedFileRealm, // has priority over the others
+		userProvidedFileRealm,
 	)
-	roles := PredefinedRoles.MergeWith(userProvidedRoles)
 
-	// reconcile the aggregate secret
-	if err := ReconcileRolesFileRealmSecret(c, es, roles, fileRealm); err != nil {
-		return client.UserAuth{}, err
+	return fileRealm, controllerUserAuth, nil
+}
+
+func aggregateRoles(c k8s.Client, es esv1.Elasticsearch, watched watches.DynamicWatches) (RolesFileContent, error) {
+	userProvided, err := reconcileUserProvidedRoles(c, es, watched)
+	if err != nil {
+		return RolesFileContent{}, nil
 	}
-
-	// return the controller user for next reconciliation steps to interact with Elasticsearch
-	return internalUsers.userAuth(ControllerUserName)
+	// merge all roles together, the last one having precedence
+	return PredefinedRoles.MergeWith(userProvided), nil
 }
 
 // RolesFileRealmSecretKey returns a reference to the K8s secret holding the roles and file realm data.
@@ -98,14 +132,14 @@ func RolesFileRealmSecretKey(es esv1.Elasticsearch) types.NamespacedName {
 	return types.NamespacedName{Namespace: es.Namespace, Name: esv1.RolesAndFileRealmSecret(es.Name)}
 }
 
-// ReconcileRolesFileRealmSecret creates or updates the single secret holding the file realm and the file-based roles.
-func ReconcileRolesFileRealmSecret(c k8s.Client, es esv1.Elasticsearch, roles RolesFileContent, fileRealm filerealm.Realm) error {
+// reconcileRolesFileRealmSecret creates or updates the single secret holding the file realm and the file-based roles.
+func reconcileRolesFileRealmSecret(c k8s.Client, es esv1.Elasticsearch, roles RolesFileContent, fileRealm filerealm.Realm) error {
 	secretData := fileRealm.FileBytes()
 	rolesBytes, err := roles.FileBytes()
 	if err != nil {
 		return err
 	}
-	secretData[ElasticRolesFile] = rolesBytes
+	secretData[RolesFile] = rolesBytes
 
 	expected := corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
