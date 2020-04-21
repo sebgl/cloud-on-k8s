@@ -57,10 +57,20 @@ pipeline {
                 script {
                     env.SHELL_EXIT_CODE = sh(returnStatus: true, script: 'make -C .ci get-test-artifacts TARGET=ci-build-operator-e2e-run ci')
 
+                    sh 'echo $ENV.SHELL_EXIT_CODE'
                     if (env.SHELL_EXIT_CODE != 0) {
+                        sh 'echo in if'
 //                         sh 'make -C .ci TARGET=e2e-generate-xml ci'
 //                         junit "e2e-tests.xml"
                         failedTests = lib.getListOfFailedTests()
+                        env.FAILED_TESTS = failedTests
+                        sh 'echo failed tests: $FAILED_TESTS'
+                    }
+
+                    if (failedTests.size() == 0) {
+                        echo 'failed tests size 0'
+                    } else {
+                        echo 'failed tests size not 0'
                     }
 
                     sh 'exit $SHELL_EXIT_CODE'
@@ -86,7 +96,9 @@ pipeline {
         }
         cleanup {
             script {
+                sh 'echo cleanup'
                 if (failedTests.size() == 0) {
+                    sh 'failed tests size is 0'
                     build job: 'cloud-on-k8s-e2e-cleanup',
                         parameters: [string(name: 'JKS_PARAM_GKE_CLUSTER', value: "eck-debug-endpoints-e2e-${BUILD_NUMBER}")],
                         wait: false
