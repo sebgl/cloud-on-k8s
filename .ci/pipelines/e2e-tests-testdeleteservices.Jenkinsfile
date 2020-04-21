@@ -83,11 +83,11 @@ pipeline {
                     botUser: true,
                     failOnError: true
                 )
-
-                build job: 'cloud-on-k8s-e2e-cleanup',
-                    parameters: [string(name: 'JKS_PARAM_GKE_CLUSTER', value: "eck-debug-endpoints-e2e-${BUILD_NUMBER}")],
-                    wait: false
             }
+
+            build job: 'cloud-on-k8s-e2e-cleanup',
+                parameters: [string(name: 'JKS_PARAM_GKE_CLUSTER', value: "eck-debug-endpoints-e2e-${BUILD_NUMBER}")],
+                wait: false
         }
         cleanup {
             cleanWs()
