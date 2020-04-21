@@ -61,8 +61,8 @@ pipeline {
                     sh 'echo $ENV.SHELL_EXIT_CODE'
                     if (env.SHELL_EXIT_CODE != 0) {
                         sh 'echo in if'
-//                         sh 'make -C .ci TARGET=e2e-generate-xml ci'
-//                         junit "e2e-tests.xml"
+                        sh 'make -C .ci TARGET=e2e-generate-xml ci'
+                        junit "e2e-tests.xml"
                         failedTests = lib.getListOfFailedTests()
                         env.FAILED_TESTS = failedTests
                         sh 'echo failed tests: $FAILED_TESTS'
