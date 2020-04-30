@@ -1,6 +1,6 @@
 // This library overrides the default checkout behavior to enable sleep+retries if there are errors
 // Added to help overcome some recurring github connection issues
-@Library('apm@current') _
+// @Library('apm@current') _
 
 def failedTests = []
 def lib
@@ -9,10 +9,6 @@ pipeline {
 
     agent {
         label 'linux'
-    }
-
-    options {
-        timeout(time: 300, unit: 'MINUTES')
     }
 
     environment {
@@ -55,15 +51,18 @@ pipeline {
                 sh 'sed "s/clusterName: eck-e2e/clusterName: eck-debug-endpoints-e2e/" -i deployer-config.yml'
                 
                 script {
+                    // setup the test environment and run the tests once
                     env.SHELL_EXIT_CODE = sh(returnStatus: true, script: 'make -C .ci get-test-artifacts TARGET=ci-build-operator-e2e-run ci')
-
                     if (env.SHELL_EXIT_CODE != 0) {
-//                         sh 'make -C .ci TARGET=e2e-generate-xml ci'
-//                         junit "e2e-tests.xml"
-                        failedTests = lib.getListOfFailedTests()
+                        sh 'exit $SHELL_EXIT_CODE'
                     }
-
-                    sh 'exit $SHELL_EXIT_CODE'
+                    // run the tests again, 20 times
+                    for (i = 0; i <20; i++) {
+                        env.SHELL_EXIT_CODE = sh(returnStatus: true, script: 'make -C .ci TARGET=e2e-run ci')
+                        if (env.SHELL_EXIT_CODE != 0) {
+                          sh 'exit $SHELL_EXIT_CODE'
+                        }
+                    }
                 }
             }
         }
@@ -74,6 +73,8 @@ pipeline {
             build job: 'cloud-on-k8s-e2e-cleanup',
                 parameters: [string(name: 'JKS_PARAM_GKE_CLUSTER', value: "eck-debug-endpoints-e2e-${BUILD_NUMBER}")],
                 wait: false
+             // schedule again
+            build job: 'cloud-on-k8s-e2e-tests-testdeleteservices', wait: false
         }
         unsuccessful {
             script {
