@@ -526,6 +526,11 @@ func (h *helper) streamTestJobOutput(streamStatus chan<- error, stop <-chan stru
 					streamStatus <- err
 					return
 				}
+				// TODO remove
+				if strings.HasSuffix(logLine, "5") {
+					// simulate scan end
+					break
+				}
 			}
 			log.Info("Log stream ended")
 			// communicate to monitorTestJob that all logs of the current batch have been processed
