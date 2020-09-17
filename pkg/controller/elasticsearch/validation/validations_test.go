@@ -2,10 +2,21 @@
 // or more contributor license agreements. Licensed under the Elastic License;
 // you may not use this file except in compliance with the Elastic License.
 
-package v1
+package validation
 
 import (
 	"testing"
+
+	"k8s.io/utils/pointer"
+
+	storagev1 "k8s.io/api/storage/v1"
+
+	"k8s.io/apimachinery/pkg/api/resource"
+
+	"github.com/elastic/cloud-on-k8s/pkg/utils/k8s"
+
+	esv1 "github.com/elastic/cloud-on-k8s/pkg/apis/elasticsearch/v1"
+	v1 "github.com/elastic/cloud-on-k8s/pkg/apis/elasticsearch/v1"
 
 	commonv1 "github.com/elastic/cloud-on-k8s/pkg/apis/common/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -15,16 +26,16 @@ import (
 func Test_checkNodeSetNameUniqueness(t *testing.T) {
 	type args struct {
 		name         string
-		es           *Elasticsearch
+		es           *v1.Elasticsearch
 		expectErrors bool
 	}
 	tests := []args{
 		{
 			name: "several duplicate nodeSets",
-			es: &Elasticsearch{
-				Spec: ElasticsearchSpec{
+			es: &v1.Elasticsearch{
+				Spec: v1.ElasticsearchSpec{
 					Version: "7.4.0",
-					NodeSets: []NodeSet{
+					NodeSets: []v1.NodeSet{
 						{Name: "foo", Count: 1},
 						{Name: "foo", Count: 1},
 						{Name: "bar", Count: 1},
@@ -36,32 +47,32 @@ func Test_checkNodeSetNameUniqueness(t *testing.T) {
 		},
 		{
 			name: "good spec with 1 nodeSet",
-			es: &Elasticsearch{
-				Spec: ElasticsearchSpec{
+			es: &v1.Elasticsearch{
+				Spec: v1.ElasticsearchSpec{
 					Version:  "7.4.0",
-					NodeSets: []NodeSet{{Name: "foo", Count: 1}},
+					NodeSets: []v1.NodeSet{{Name: "foo", Count: 1}},
 				},
 			},
 			expectErrors: false,
 		},
 		{
 			name: "good spec with 2 nodeSets",
-			es: &Elasticsearch{
+			es: &v1.Elasticsearch{
 				TypeMeta: metav1.TypeMeta{APIVersion: "elasticsearch.k8s.elastic.co/v1"},
-				Spec: ElasticsearchSpec{
+				Spec: v1.ElasticsearchSpec{
 					Version:  "7.4.0",
-					NodeSets: []NodeSet{{Name: "foo", Count: 1}, {Name: "bar", Count: 1}},
+					NodeSets: []v1.NodeSet{{Name: "foo", Count: 1}, {Name: "bar", Count: 1}},
 				},
 			},
 			expectErrors: false,
 		},
 		{
 			name: "duplicate nodeSet",
-			es: &Elasticsearch{
+			es: &v1.Elasticsearch{
 				TypeMeta: metav1.TypeMeta{APIVersion: "elasticsearch.k8s.elastic.co/v1"},
-				Spec: ElasticsearchSpec{
+				Spec: v1.ElasticsearchSpec{
 					Version:  "7.4.0",
-					NodeSets: []NodeSet{{Name: "foo", Count: 1}, {Name: "foo", Count: 1}},
+					NodeSets: []v1.NodeSet{{Name: "foo", Count: 1}, {Name: "foo", Count: 1}},
 				},
 			},
 			expectErrors: true,
@@ -83,7 +94,7 @@ func Test_checkNodeSetNameUniqueness(t *testing.T) {
 func Test_hasCorrectNodeRoles(t *testing.T) {
 	type m map[string]interface{}
 
-	esWithRoles := func(version string, count int32, nodeSetRoles ...m) *Elasticsearch {
+	esWithRoles := func(version string, count int32, nodeSetRoles ...m) esv1.Elasticsearch {
 		x := es(version)
 		for _, nsc := range nodeSetRoles {
 			data := nsc
@@ -92,7 +103,7 @@ func Test_hasCorrectNodeRoles(t *testing.T) {
 				cfg = &commonv1.Config{Data: data}
 			}
 
-			x.Spec.NodeSets = append(x.Spec.NodeSets, NodeSet{
+			x.Spec.NodeSets = append(x.Spec.NodeSets, v1.NodeSet{
 				Count:  count,
 				Config: cfg,
 			})
@@ -103,7 +114,7 @@ func Test_hasCorrectNodeRoles(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		es           *Elasticsearch
+		es           esv1.Elasticsearch
 		expectErrors bool
 	}{
 		{
@@ -118,41 +129,41 @@ func Test_hasCorrectNodeRoles(t *testing.T) {
 		},
 		{
 			name:         "no master defined (node attributes)",
-			es:           esWithRoles("7.6.0", 1, m{NodeMaster: "false", NodeData: "true"}, m{NodeMaster: "true", NodeVotingOnly: "true"}),
+			es:           esWithRoles("7.6.0", 1, m{v1.NodeMaster: "false", v1.NodeData: "true"}, m{v1.NodeMaster: "true", v1.NodeVotingOnly: "true"}),
 			expectErrors: true,
 		},
 		{
 			name:         "no master defined (node roles)",
-			es:           esWithRoles("7.9.0", 1, m{NodeRoles: []string{DataRole}}, m{NodeRoles: []string{MasterRole, VotingOnlyRole}}),
+			es:           esWithRoles("7.9.0", 1, m{v1.NodeRoles: []string{v1.DataRole}}, m{v1.NodeRoles: []string{v1.MasterRole, v1.VotingOnlyRole}}),
 			expectErrors: true,
 		},
 		{
 			name:         "zero master nodes (node attributes)",
-			es:           esWithRoles("7.6.0", 0, m{NodeMaster: "true", NodeData: "true"}, m{NodeData: "true"}),
+			es:           esWithRoles("7.6.0", 0, m{v1.NodeMaster: "true", v1.NodeData: "true"}, m{v1.NodeData: "true"}),
 			expectErrors: true,
 		},
 		{
 			name:         "zero master nodes (node roles)",
-			es:           esWithRoles("7.9.0", 0, m{NodeRoles: []string{MasterRole, DataRole}}, m{NodeRoles: []string{DataRole}}),
+			es:           esWithRoles("7.9.0", 0, m{v1.NodeRoles: []string{v1.MasterRole, v1.DataRole}}, m{v1.NodeRoles: []string{v1.DataRole}}),
 			expectErrors: true,
 		},
 		{
 			name:         "mixed node attributes and node roles",
-			es:           esWithRoles("7.9.0", 1, m{NodeMaster: "true", NodeRoles: []string{DataRole}}, m{NodeRoles: []string{DataRole, TransformRole}}),
+			es:           esWithRoles("7.9.0", 1, m{v1.NodeMaster: "true", v1.NodeRoles: []string{v1.DataRole}}, m{v1.NodeRoles: []string{v1.DataRole, v1.TransformRole}}),
 			expectErrors: true,
 		},
 		{
 			name:         "node roles on older version",
-			es:           esWithRoles("7.6.0", 1, m{NodeRoles: []string{MasterRole}}, m{NodeRoles: []string{DataRole}}),
+			es:           esWithRoles("7.6.0", 1, m{v1.NodeRoles: []string{v1.MasterRole}}, m{v1.NodeRoles: []string{v1.DataRole}}),
 			expectErrors: true,
 		},
 		{
 			name: "valid configuration (node attributes)",
-			es:   esWithRoles("7.6.0", 3, m{NodeMaster: "true", NodeData: "true"}, m{NodeData: "true"}),
+			es:   esWithRoles("7.6.0", 3, m{v1.NodeMaster: "true", v1.NodeData: "true"}, m{v1.NodeData: "true"}),
 		},
 		{
 			name: "valid configuration (node roles)",
-			es:   esWithRoles("7.9.0", 3, m{NodeRoles: []string{MasterRole, DataRole}}, m{NodeRoles: []string{DataRole}}),
+			es:   esWithRoles("7.9.0", 3, m{v1.NodeRoles: []string{v1.MasterRole, v1.DataRole}}, m{v1.NodeRoles: []string{v1.DataRole}}),
 		},
 	}
 	for _, tt := range tests {
@@ -169,7 +180,7 @@ func Test_hasCorrectNodeRoles(t *testing.T) {
 func Test_supportedVersion(t *testing.T) {
 	tests := []struct {
 		name         string
-		es           *Elasticsearch
+		es           esv1.Elasticsearch
 		expectErrors bool
 	}{
 		{
@@ -203,12 +214,12 @@ func Test_supportedVersion(t *testing.T) {
 func Test_validName(t *testing.T) {
 	tests := []struct {
 		name         string
-		es           *Elasticsearch
+		es           esv1.Elasticsearch
 		expectErrors bool
 	}{
 		{
 			name: "name length too long",
-			es: &Elasticsearch{
+			es: esv1.Elasticsearch{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "default",
 					Name:      "that-is-a-very-long-name-with-37chars",
@@ -218,7 +229,7 @@ func Test_validName(t *testing.T) {
 		},
 		{
 			name: "name length OK",
-			es: &Elasticsearch{
+			es: esv1.Elasticsearch{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "default",
 					Name:      "that-is-a-very-long-name-with-36char",
@@ -246,20 +257,20 @@ func Test_validSanIP(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		es           *Elasticsearch
+		es           esv1.Elasticsearch
 		expectErrors bool
 	}{
 		{
 			name: "no SAN IP: OK",
-			es: &Elasticsearch{
-				Spec: ElasticsearchSpec{},
+			es: esv1.Elasticsearch{
+				Spec: esv1.ElasticsearchSpec{},
 			},
 			expectErrors: false,
 		},
 		{
 			name: "valid SAN IPs: OK",
-			es: &Elasticsearch{
-				Spec: ElasticsearchSpec{
+			es: esv1.Elasticsearch{
+				Spec: v1.ElasticsearchSpec{
 					HTTP: commonv1.HTTPConfig{
 						TLS: commonv1.TLSOptions{
 							SelfSignedCertificate: &commonv1.SelfSignedCertificate{
@@ -283,8 +294,8 @@ func Test_validSanIP(t *testing.T) {
 		},
 		{
 			name: "invalid SAN IPs: NOT OK",
-			es: &Elasticsearch{
-				Spec: ElasticsearchSpec{
+			es: esv1.Elasticsearch{
+				Spec: v1.ElasticsearchSpec{
 					HTTP: commonv1.HTTPConfig{
 						TLS: commonv1.TLSOptions{
 							SelfSignedCertificate: &commonv1.SelfSignedCertificate{
@@ -318,16 +329,10 @@ func Test_validSanIP(t *testing.T) {
 func TestValidation_noDowngrades(t *testing.T) {
 	tests := []struct {
 		name         string
-		current      *Elasticsearch
-		proposed     *Elasticsearch
+		current      esv1.Elasticsearch
+		proposed     esv1.Elasticsearch
 		expectErrors bool
 	}{
-		{
-			name:         "no validation on create",
-			current:      nil,
-			proposed:     es("6.8.0"),
-			expectErrors: false,
-		},
 		{
 			name:         "prevent downgrade",
 			current:      es("2.0.0"),
@@ -343,7 +348,7 @@ func TestValidation_noDowngrades(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actual := noDowngrades(tt.current, tt.proposed)
+			actual := noDowngrades(tt.current, tt.proposed, nil)
 			actualErrors := len(actual) > 0
 			if tt.expectErrors != actualErrors {
 				t.Errorf("failed noDowngrades(). Name: %v, actual %v, wanted: %v, value: %v", tt.name, actual, tt.expectErrors, tt.proposed)
@@ -355,16 +360,10 @@ func TestValidation_noDowngrades(t *testing.T) {
 func Test_validUpgradePath(t *testing.T) {
 	tests := []struct {
 		name         string
-		current      *Elasticsearch
-		proposed     *Elasticsearch
+		current      esv1.Elasticsearch
+		proposed     esv1.Elasticsearch
 		expectErrors bool
 	}{
-		{
-			name:         "new cluster accepted",
-			current:      nil,
-			proposed:     es("1.0.0"),
-			expectErrors: false,
-		},
 		{
 			name:     "unsupported version rejected",
 			current:  es("1.0.0"),
@@ -393,7 +392,7 @@ func Test_validUpgradePath(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actual := validUpgradePath(tt.current, tt.proposed)
+			actual := validUpgradePath(tt.current, tt.proposed, nil)
 			actualErrors := len(actual) > 0
 			if tt.expectErrors != actualErrors {
 				t.Errorf("failed validUpgradePath(). Name: %v, actual %v, wanted: %v, value: %v", tt.name, actual, tt.expectErrors, tt.proposed)
@@ -403,8 +402,8 @@ func Test_validUpgradePath(t *testing.T) {
 }
 
 func Test_noUnknownFields(t *testing.T) {
-	GetEsWithLastApplied := func(lastApplied string) Elasticsearch {
-		return Elasticsearch{
+	GetEsWithLastApplied := func(lastApplied string) v1.Elasticsearch {
+		return v1.Elasticsearch{
 			ObjectMeta: metav1.ObjectMeta{
 				Annotations: map[string]string{
 					corev1.LastAppliedConfigAnnotation: lastApplied,
@@ -415,7 +414,7 @@ func Test_noUnknownFields(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		es           Elasticsearch
+		es           v1.Elasticsearch
 		errorOnField string
 	}{
 		{
@@ -428,7 +427,7 @@ func Test_noUnknownFields(t *testing.T) {
 		},
 		{
 			name: "no annotation",
-			es:   Elasticsearch{},
+			es:   v1.Elasticsearch{},
 		},
 		{
 			name: "bad annotation",
@@ -443,7 +442,7 @@ func Test_noUnknownFields(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actual := noUnknownFields(&tt.es)
+			actual := noUnknownFields(tt.es)
 			actualErrors := len(actual) > 0
 			expectErrors := tt.errorOnField != ""
 			if expectErrors != actualErrors || (actualErrors && actual[0].Field != tt.errorOnField) {
@@ -459,12 +458,157 @@ func Test_noUnknownFields(t *testing.T) {
 }
 
 // es returns an es fixture at a given version
-func es(v string) *Elasticsearch {
-	return &Elasticsearch{
+func es(v string) esv1.Elasticsearch {
+	return v1.Elasticsearch{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "foo",
 		},
-		Spec: ElasticsearchSpec{Version: v},
+		Spec: v1.ElasticsearchSpec{Version: v},
+	}
+}
+
+func Test_pvcModification(t *testing.T) {
+	scExpansion := storagev1.StorageClass{ObjectMeta: metav1.ObjectMeta{Name: "sample-sc-expansion"}, AllowVolumeExpansion: pointer.BoolPtr(true)}
+	scNoExpansion := storagev1.StorageClass{ObjectMeta: metav1.ObjectMeta{Name: "sample-sc-no-expansion"}}
+	es1Gi := esv1.Elasticsearch{
+		Spec: esv1.ElasticsearchSpec{
+			Version: "7.2.0",
+			NodeSets: []esv1.NodeSet{
+				{
+					Name: "master",
+					VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
+						{
+							ObjectMeta: metav1.ObjectMeta{
+								Name: "elasticsearch-data",
+							},
+							Spec: corev1.PersistentVolumeClaimSpec{
+								Resources: corev1.ResourceRequirements{
+									Requests: corev1.ResourceList{
+										corev1.ResourceStorage: resource.MustParse("1Gi"),
+									},
+								},
+								StorageClassName: pointer.StringPtr(scExpansion.Name),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	type args struct {
+		current  func() v1.Elasticsearch
+		proposed func() v1.Elasticsearch
+		client   k8s.Client
+	}
+	tests := []struct {
+		name         string
+		args         args
+		expectErrors bool
+	}{
+		{
+			name: "same claims: allow",
+			args: args{
+				current:  func() esv1.Elasticsearch { return *es1Gi.DeepCopy() },
+				proposed: func() esv1.Elasticsearch { return *es1Gi.DeepCopy() },
+				client:   k8s.WrappedFakeClient(&scExpansion),
+			},
+			expectErrors: false,
+		},
+		{
+			name: "same claim with size expressed differently (1024Mi vs. 1Gi): allow",
+			args: args{
+				current: func() esv1.Elasticsearch { return *es1Gi.DeepCopy() },
+				proposed: func() esv1.Elasticsearch {
+					resized := *es1Gi.DeepCopy()
+					resized.Spec.NodeSets[0].VolumeClaimTemplates[0].Spec.Resources.Requests[corev1.ResourceStorage] = resource.MustParse("1024Mi")
+					return resized
+				},
+				client: k8s.WrappedFakeClient(&scExpansion),
+			},
+			expectErrors: false,
+		},
+		{
+			name: "volume expansion: allow",
+			args: args{
+				current: func() esv1.Elasticsearch { return *es1Gi.DeepCopy() },
+				proposed: func() esv1.Elasticsearch {
+					resized := *es1Gi.DeepCopy()
+					resized.Spec.NodeSets[0].VolumeClaimTemplates[0].Spec.Resources.Requests[corev1.ResourceStorage] = resource.MustParse("2Gi")
+					return resized
+				},
+				client: k8s.WrappedFakeClient(&scExpansion),
+			},
+			expectErrors: false,
+		},
+		{
+			name: "new nodeSet: allow",
+			args: args{
+				current: func() esv1.Elasticsearch { return *es1Gi.DeepCopy() },
+				proposed: func() esv1.Elasticsearch {
+					withNewNodeSet := *es1Gi.DeepCopy()
+					nodeSet := *es1Gi.Spec.NodeSets[0].DeepCopy()
+					nodeSet.Name = "another-nodeset"
+					withNewNodeSet.Spec.NodeSets = append(withNewNodeSet.Spec.NodeSets, nodeSet)
+					return withNewNodeSet
+				},
+				client: k8s.WrappedFakeClient(&scExpansion),
+			},
+			expectErrors: false,
+		},
+		{
+			name: "volume expansion with incompatible storage class: disallow",
+			args: args{
+				current: func() esv1.Elasticsearch {
+					patchedSc := *es1Gi.DeepCopy()
+					patchedSc.Spec.NodeSets[0].VolumeClaimTemplates[0].Spec.StorageClassName = pointer.StringPtr(scNoExpansion.Name)
+					return patchedSc
+				},
+				proposed: func() esv1.Elasticsearch {
+					resized := *es1Gi.DeepCopy()
+					resized.Spec.NodeSets[0].VolumeClaimTemplates[0].Spec.StorageClassName = pointer.StringPtr(scNoExpansion.Name)
+					resized.Spec.NodeSets[0].VolumeClaimTemplates[0].Spec.Resources.Requests[corev1.ResourceStorage] = resource.MustParse("2Gi")
+					return resized
+				},
+				client: k8s.WrappedFakeClient(&scNoExpansion),
+			},
+			expectErrors: true,
+		},
+		{
+			name: "modified storage class name: disallow",
+			args: args{
+				current: func() esv1.Elasticsearch { return *es1Gi.DeepCopy() },
+				proposed: func() esv1.Elasticsearch {
+					differentSc := *es1Gi.DeepCopy()
+					differentSc.Spec.NodeSets[0].VolumeClaimTemplates[0].Spec.StorageClassName = pointer.StringPtr(scNoExpansion.Name)
+					return differentSc
+				},
+				client: k8s.WrappedFakeClient(&scNoExpansion),
+			},
+			expectErrors: true,
+		},
+		{
+			name: "removed claim: disallow",
+			args: args{
+				current: func() esv1.Elasticsearch { return *es1Gi.DeepCopy() },
+				proposed: func() esv1.Elasticsearch {
+					noClaim := *es1Gi.DeepCopy()
+					noClaim.Spec.NodeSets[0].VolumeClaimTemplates = nil
+					return noClaim
+				},
+				client: k8s.WrappedFakeClient(&scNoExpansion),
+			},
+			expectErrors: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := pvcModification(tt.args.current(), tt.args.proposed(), tt.args.client)
+			actualErrors := len(got) > 0
+			if tt.expectErrors != actualErrors {
+				t.Errorf("failed pvcModification(). Name: %v, actual %v, wanted: %v, value: %v", tt.name, actualErrors, tt.expectErrors, got)
+			}
+		})
 	}
 }

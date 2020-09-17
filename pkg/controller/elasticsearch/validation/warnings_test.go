@@ -2,10 +2,13 @@
 // or more contributor license agreements. Licensed under the Elastic License;
 // you may not use this file except in compliance with the Elastic License.
 
-package v1
+package validation
 
 import (
 	"testing"
+
+	esv1 "github.com/elastic/cloud-on-k8s/pkg/apis/elasticsearch/v1"
+	v1 "github.com/elastic/cloud-on-k8s/pkg/apis/elasticsearch/v1"
 
 	commonv1 "github.com/elastic/cloud-on-k8s/pkg/apis/common/v1"
 )
@@ -13,7 +16,7 @@ import (
 func Test_noUnsupportedSettings(t *testing.T) {
 	tests := []struct {
 		name         string
-		es           *Elasticsearch
+		es           esv1.Elasticsearch
 		expectErrors bool
 	}{
 
@@ -24,14 +27,14 @@ func Test_noUnsupportedSettings(t *testing.T) {
 		},
 		{
 			name: "warn of unsupported setting FAIL",
-			es: &Elasticsearch{
-				Spec: ElasticsearchSpec{
+			es: esv1.Elasticsearch{
+				Spec: v1.ElasticsearchSpec{
 					Version: "7.0.0",
-					NodeSets: []NodeSet{
+					NodeSets: []v1.NodeSet{
 						{
 							Config: &commonv1.Config{
 								Data: map[string]interface{}{
-									ClusterInitialMasterNodes: "foo",
+									v1.ClusterInitialMasterNodes: "foo",
 								},
 							},
 							Count: 1,
@@ -43,21 +46,21 @@ func Test_noUnsupportedSettings(t *testing.T) {
 		},
 		{
 			name: "warn of unsupported in multiple nodes FAIL",
-			es: &Elasticsearch{
-				Spec: ElasticsearchSpec{
+			es: esv1.Elasticsearch{
+				Spec: v1.ElasticsearchSpec{
 					Version: "7.0.0",
-					NodeSets: []NodeSet{
+					NodeSets: []v1.NodeSet{
 						{
 							Config: &commonv1.Config{
 								Data: map[string]interface{}{
-									ClusterInitialMasterNodes: "foo",
+									v1.ClusterInitialMasterNodes: "foo",
 								},
 							},
 						},
 						{
 							Config: &commonv1.Config{
 								Data: map[string]interface{}{
-									XPackSecurityTransportSslVerificationMode: "bar",
+									v1.XPackSecurityTransportSslVerificationMode: "bar",
 								},
 							},
 						},
@@ -68,10 +71,10 @@ func Test_noUnsupportedSettings(t *testing.T) {
 		},
 		{
 			name: "non unsupported setting OK",
-			es: &Elasticsearch{
-				Spec: ElasticsearchSpec{
+			es: esv1.Elasticsearch{
+				Spec: v1.ElasticsearchSpec{
 					Version: "7.0.0",
-					NodeSets: []NodeSet{
+					NodeSets: []v1.NodeSet{
 						{
 							Config: &commonv1.Config{
 								Data: map[string]interface{}{
@@ -86,14 +89,14 @@ func Test_noUnsupportedSettings(t *testing.T) {
 		},
 		{
 			name: "supported settings with unsupported string prefix OK",
-			es: &Elasticsearch{
-				Spec: ElasticsearchSpec{
+			es: esv1.Elasticsearch{
+				Spec: v1.ElasticsearchSpec{
 					Version: "7.0.0",
-					NodeSets: []NodeSet{
+					NodeSets: []v1.NodeSet{
 						{
 							Config: &commonv1.Config{
 								Data: map[string]interface{}{
-									XPackSecurityTransportSslCertificateAuthorities: "foo",
+									v1.XPackSecurityTransportSslCertificateAuthorities: "foo",
 								},
 							},
 						},
@@ -104,10 +107,10 @@ func Test_noUnsupportedSettings(t *testing.T) {
 		},
 		{
 			name: "settings are canonicalized before validation",
-			es: &Elasticsearch{
-				Spec: ElasticsearchSpec{
+			es: esv1.Elasticsearch{
+				Spec: v1.ElasticsearchSpec{
 					Version: "7.0.0",
-					NodeSets: []NodeSet{
+					NodeSets: []v1.NodeSet{
 						{
 							Config: &commonv1.Config{
 								Data: map[string]interface{}{

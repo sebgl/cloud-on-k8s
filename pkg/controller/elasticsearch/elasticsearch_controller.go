@@ -8,6 +8,8 @@ import (
 	"context"
 	"sync/atomic"
 
+	"github.com/elastic/cloud-on-k8s/pkg/controller/elasticsearch/validation"
+
 	pkgerrors "github.com/pkg/errors"
 	"go.elastic.co/apm"
 	appsv1 "k8s.io/api/apps/v1"
@@ -242,7 +244,7 @@ func (r *ReconcileElasticsearch) internalReconcile(
 
 	span, ctx := apm.StartSpan(ctx, "validate", tracing.SpanTypeApp)
 	// this is the same validation as the webhook, but we run it again here in case the webhook has not been configured
-	err := es.ValidateCreate()
+	err := validation.ValidateElasticsearch(es)
 	span.End()
 
 	if err != nil {
@@ -256,7 +258,7 @@ func (r *ReconcileElasticsearch) internalReconcile(
 		return results
 	}
 
-	err = es.CheckForWarnings()
+	err = validation.CheckForWarnings(es)
 	if err != nil {
 		log.Info(
 			"Elasticsearch manifest has warnings. Proceed at your own risk. "+err.Error(),
