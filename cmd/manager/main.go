@@ -217,6 +217,11 @@ func Command() *cobra.Command {
 		"",
 		"Kubernetes namespace the operator runs in",
 	)
+	cmd.Flags().Bool(
+		operator.ValidateStorageClass,
+		true,
+		"Specifies whether storage classes volume expansion support should be verified. Can be disabled if cluster-wide storage class RBAC access is not available.",
+	)
 	cmd.Flags().String(
 		operator.WebhookCertDirFlag,
 		// this is controller-runtime's own default, copied here for making the default explicit when using `--help`
@@ -487,6 +492,7 @@ func startOperator(stopChan <-chan struct{}) error {
 		},
 		MaxConcurrentReconciles:   viper.GetInt(operator.MaxConcurrentReconcilesFlag),
 		SetDefaultSecurityContext: viper.GetBool(operator.SetDefaultSecurityContextFlag),
+		ValidateStorageClass:      viper.GetBool(operator.ValidateStorageClass),
 		Tracer:                    tracer,
 	}
 
